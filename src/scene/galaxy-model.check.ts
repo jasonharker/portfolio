@@ -36,11 +36,12 @@ for (const w of places) {
   assert.ok(d < 0.05, `${w.id} is ${d.toFixed(3)} from the nearest arm`);
 }
 
-// Stars actually follow the arms: most arm-band stars near a spine, not uniform.
-let near = 0;
+// Stars actually follow the arms: well above what the same radii with uniform angles would give.
+let near = 0, uniform = 0;
 for (let i = 0; i < N; i++) {
   const x = a.positions[i * 3], z = a.positions[i * 3 + 2], r = Math.hypot(x, z);
   if (r < 3 || r > 12) continue;
+  uniform += Math.min(1, (a.arms * 2) / (2 * Math.PI * r));
   const th = Math.atan2(z, x);
   const dmin = Math.min(...Array.from({ length: a.arms }, (_, arm) => {
     const dt = Math.abs((((th - a.armAngleAt(r, arm)) % (2 * Math.PI)) + 3 * Math.PI) % (2 * Math.PI) - Math.PI);
@@ -48,6 +49,6 @@ for (let i = 0; i < N; i++) {
   }));
   if (dmin < 1) near++;
 }
-assert.ok(near > N * 0.3, `arm-hugging stars: ${near}`);
+assert.ok(near > uniform * 1.5, `arm-hugging stars: ${near}, uniform would give ${uniform.toFixed(0)}`);
 
-console.log(`galaxy-model ok: ${a.arms} arms, ${places.length} places on arms, ${near}/${N} stars within 1 kpc of a spine`);
+console.log(`galaxy-model ok: ${a.arms} arms, ${places.length} places on arms, ${near} stars within 1 kpc of a spine (uniform: ${uniform.toFixed(0)})`);

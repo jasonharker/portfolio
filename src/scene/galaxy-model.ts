@@ -31,13 +31,13 @@ function prng(seed: number) {
 
 const wrap = (a: number) => ((a % TAU) + TAU) % TAU;
 
-const ARMS = 2;
+const ARMS = 4;
 const BEND = 0.25; // width of an arm's bend around a place, in ln(r)
 
 /**
- * A two-armed logarithmic spiral, θ = φ + k·π + ln(r)/b + bend(r), b = tan(pitch). Pitch and φ are searched
- * (pitch within a realistic 8°–20°) so the places sit as close to the arms as they can; then each arm is bent
- * by a sum of gaussians in ln(r), solved so it passes exactly through every place assigned to it.
+ * A four-armed logarithmic spiral, θ = φ + k·π/2 + ln(r)/b + bend(r), b = tan(pitch). Pitch (12°–25°, an open
+ * Sb–Sc spiral) and φ are searched so the places sit as close to the arms as they can; then each arm is bent by a
+ * sum of gaussians in ln(r), solved so it passes exactly through every place assigned to it.
  */
 function spiral(waypoints: Waypoint[]) {
   const places = waypoints
@@ -53,7 +53,7 @@ function spiral(waypoints: Waypoint[]) {
   const residuals = (b: number, phi: number) => places.map((p) => nearest(p.a - p.lr / b - phi));
 
   let pitch = 12, phi = 0, worst = Infinity;
-  for (let deg = 8; places.length && deg <= 20; deg += 0.05) {
+  for (let deg = 12; places.length && deg <= 25; deg += 0.05) {
     const b = Math.tan((deg * Math.PI) / 180);
     for (let f = 0; f < step; f += 0.004) {
       let w = 0;
@@ -122,7 +122,7 @@ export function galaxyModel(seed: number, count: number, waypoints: Waypoint[]):
     } else if (kind < 0.8) {
       // Arm: an exponential disc wrapped along one arm, with a gaussian cross-section.
       const r = discRadius(1.4, 4.2);
-      const width = 0.3 + 0.045 * r;
+      const width = 0.45 + 0.07 * r;
       const off = gauss() * width;
       const a = armAngleAt(r, Math.floor(rand() * ARMS)) + off / r;
       x = r * Math.cos(a);
