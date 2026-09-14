@@ -4,15 +4,18 @@ import '../styles/site.css';
 interface Props {
   title?: string;
   description?: string;
+  bodyClass?: string;
+  noindex?: boolean;
 }
 
-const { title, description = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit.' } = Astro.props;
+const { title, description = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit.', bodyClass, noindex } = Astro.props;
 const fullTitle = title ? `${title} — Jason Harker` : 'Jason Harker';
 const path = Astro.url.pathname;
 const nav = [
-  { href: '/', label: 'Home' },
-  { href: '/writing/', label: 'Writing' },
-  { href: '/about/', label: 'About' },
+  { href: '/incidents/', label: 'Incidents' },
+  { href: '/gitops/', label: 'GitOps' },
+  { href: '/documentation/', label: 'Documentation' },
+  { href: '/resume/', label: 'Resume' },
 ];
 ---
 <!doctype html>
@@ -21,26 +24,34 @@ const nav = [
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="description" content={description} />
+    <meta name="theme-color" content="#0a0d16" />
+    {noindex && <meta name="robots" content="noindex" />}
     <title>{fullTitle}</title>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   </head>
-  <body>
+  <body class={bodyClass}>
+    <div class="scene" aria-hidden="true"></div>
     <header class="masthead">
-      <a class="wordmark" href="/">Jason Harker</a>
+      <a class="wordmark" href="/" aria-current={path === '/' ? 'page' : undefined}>Jason Harker</a>
       <nav aria-label="Primary">
         {nav.map((item) => (
-          <a href={item.href} aria-current={path === item.href ? 'page' : undefined}>{item.label}</a>
+          <a href={item.href} aria-current={path.startsWith(item.href) ? 'page' : undefined}>{item.label}</a>
         ))}
       </nav>
+      <button class="look" type="button" aria-pressed="false">Look around</button>
     </header>
-    <main>
+    <main class="column">
       <slot />
     </main>
-    <footer class="colophon">
-      <p>
-        Lorem ipsum dolor sit amet, consectetur adipiscing elit.
-        <a href="https://testing.jasonharker.com">Archive</a>.
-      </p>
-    </footer>
+    <script>
+      const button = document.querySelector<HTMLButtonElement>('.look')!;
+      const set = (on: boolean) => {
+        document.documentElement.toggleAttribute('data-look', on);
+        button.setAttribute('aria-pressed', String(on));
+        button.textContent = on ? 'Back to reading' : 'Look around';
+      };
+      button.addEventListener('click', () => set(!document.documentElement.hasAttribute('data-look')));
+      document.addEventListener('keydown', (e) => e.key === 'Escape' && set(false));
+    </script>
   </body>
 </html>

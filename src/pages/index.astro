@@ -1,50 +1,31 @@
 ---
+import { getEntry } from 'astro:content';
 import Base from '../layouts/Base.astro';
 
-const essays = Object.values(import.meta.glob('./writing/*.md', { eager: true }))
-  .map((mod: any) => ({ ...mod.frontmatter, url: mod.url }))
-  .sort((a, b) => b.date.localeCompare(a.date));
+const { nodes } = (await getEntry('topology', 'thales'))!.data;
+const layers = [
+  { id: 'physical', name: 'Physical' },
+  { id: 'proxmox', name: 'Proxmox' },
+  { id: 'kubernetes', name: 'Kubernetes' },
+  { id: 'services', name: 'Services' },
+];
 ---
 <Base>
-  <section class="lede">
-    <p class="kicker">Lorem ipsum · Dolor sit</p>
-    <h1>Lorem ipsum dolor sit amet, consectetur adipiscing elit.</h1>
-    <p class="standfirst">
-      Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.
-      Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
-    </p>
-  </section>
-
-  <section class="section">
-    <p class="section-label">Writing</p>
-    <ul class="index">
-      {essays.map((e) => (
-        <li>
-          <a href={e.url}>
-            <p class="kicker">{e.kicker}</p>
-            <h3>{e.title}</h3>
-            <p>{e.dek}</p>
-          </a>
-        </li>
-      ))}
-    </ul>
-  </section>
-
-  <section class="section">
-    <p class="section-label">Now</p>
-    <div class="two-col">
-      <div>
-        <h3>Lorem ipsum</h3>
-        <p>Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.</p>
-      </div>
-      <div>
-        <h3>Dolor sit</h3>
-        <p>Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur.</p>
-      </div>
-      <div>
-        <h3>Amet consectetur</h3>
-        <p>Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.</p>
-      </div>
-    </div>
-  </section>
+  <h1>Lorem ipsum dolor sit amet</h1>
+  <p class="dek">Consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p>
+  <div class="prose">
+    <p>Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur.</p>
+  </div>
+  <div class="layers">
+    {layers.map((layer) => (
+      <section data-layer={layer.id}>
+        <h2>{layer.name}</h2>
+        <ul class="hosts">
+          {nodes.filter((n) => n.layer === layer.id).map((n) => (
+            <li>{n.id} <span>{n.role}</span></li>
+          ))}
+        </ul>
+      </section>
+    ))}
+  </div>
 </Base>

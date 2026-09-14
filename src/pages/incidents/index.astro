@@ -1,0 +1,23 @@
+---
+import { getCollection } from 'astro:content';
+import Base from '../../layouts/Base.astro';
+
+const incidents = (await getCollection('incidents')).sort((a, b) => a.data.order - b.data.order);
+const orders = incidents.map((i) => i.data.order);
+if (new Set(orders).size !== orders.length) throw new Error('incidents: duplicate `order` values');
+---
+<Base title="Incidents">
+  <h1>Lorem ipsum dolor</h1>
+  <p class="dek">Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium.</p>
+  <ul class="list">
+    {incidents.map((i) => (
+      <li>
+        <a href={`/incidents/${i.id}/`}>
+          <p class="label">{i.data.label}</p>
+          <h2>{i.data.title}</h2>
+          <p>{i.data.dek}</p>
+        </a>
+      </li>
+    ))}
+  </ul>
+</Base>

@@ -1,98 +1,148 @@
-:root {
-  --paper: #f7f3ec;
-  --ink: #1d1b18;
-  --muted: #6b645a;
-  --rule: #d9d1c4;
-  --accent: #8a3b12;
-  --serif: 'Iowan Old Style', 'Palatino Linotype', Charter, 'Bitstream Charter', Georgia, serif;
-  --sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  --measure: 38rem;
-  color-scheme: light dark;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --paper: #161513;
-    --ink: #ebe5da;
-    --muted: #a39b8e;
-    --rule: #34312c;
-    --accent: #e08a5c;
-  }
-}
+@import './tokens.css';
 
 *, *::before, *::after { box-sizing: border-box; }
 
 body {
   margin: 0;
-  background: var(--paper);
+  background: var(--ground);
   color: var(--ink);
-  font: 1.125rem/1.65 var(--serif);
-  padding-inline: 1.25rem;
+  font: var(--step-0)/1.6 var(--sans);
   -webkit-font-smoothing: antialiased;
 }
 
-a { color: var(--accent); text-underline-offset: 0.18em; text-decoration-thickness: 1px; }
+a { color: var(--link); text-underline-offset: 0.2em; text-decoration-thickness: 1px; }
 a:hover { text-decoration-thickness: 2px; }
+:focus-visible { outline: 2px solid var(--star-5600); outline-offset: 2px; }
 
-.masthead, main, .colophon { max-width: 52rem; margin-inline: auto; }
+h1, h2, h3 { font-weight: 600; line-height: 1.2; text-wrap: balance; margin: 0; }
+h1 { font-size: var(--step-4); }
+h2 { font-size: var(--step-2); }
+h3 { font-size: var(--step-1); }
+p { margin: 0; }
+
+/* The scene. M2 mounts the canvas in here; until then a CSS sky stands in, with the
+   galactic core glowing right of centre. */
+.scene {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(ellipse 28rem 16rem at 72% 45%, color-mix(in srgb, var(--star-5600) 22%, transparent), transparent 70%),
+    var(--ground);
+}
+/* Recede: dark under the column, clear toward the object. */
+.scene::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to right, var(--ground) 0, var(--ground) 30rem, transparent 60%);
+  transition: opacity 0.3s;
+}
 
 .masthead {
   display: flex;
   flex-wrap: wrap;
-  justify-content: space-between;
   align-items: baseline;
-  gap: 0.75rem 2rem;
-  padding-block: 2rem 1rem;
-  border-bottom: 1px solid var(--rule);
+  gap: var(--space-2) var(--space-5);
+  padding: var(--space-4) clamp(var(--space-3), 6vw, var(--space-6));
 }
-.wordmark { font-size: 1.35rem; font-weight: 600; letter-spacing: 0.01em; color: var(--ink); text-decoration: none; }
-.masthead nav { display: flex; gap: 1.5rem; font: 0.8rem/1 var(--sans); letter-spacing: 0.12em; text-transform: uppercase; }
+.wordmark { font-size: var(--step-1); font-weight: 600; color: var(--ink); text-decoration: none; }
+.masthead nav { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); }
 .masthead nav a { color: var(--muted); text-decoration: none; }
-.masthead nav a[aria-current='page'], .masthead nav a:hover { color: var(--ink); }
-
-main { padding-block: 3rem 4rem; }
-
-.kicker, .byline, .section-label {
-  font: 0.75rem/1.4 var(--sans);
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
+.masthead nav a:hover, .masthead nav a[aria-current='page'] { color: var(--ink); }
+.look {
+  margin-left: auto;
+  font: inherit;
   color: var(--muted);
-  margin: 0;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+.look:hover, .look[aria-pressed='true'] { color: var(--ink); }
+
+/* Fixed reading column. */
+.column {
+  max-width: calc(var(--measure) + 2 * var(--space-3));
+  margin-left: clamp(0rem, 6vw - var(--space-3), var(--space-6));
+  padding: var(--space-5) var(--space-3) var(--space-6);
+}
+.column > * + * { margin-top: var(--space-4); }
+.dek { font-size: var(--step-1); color: var(--muted); }
+
+.prose > * + * { margin-top: var(--space-3); }
+.prose h2 { margin-top: var(--space-5); }
+.prose pre { padding: var(--space-3); overflow-x: auto; font-size: var(--step--1); background: var(--ground-raised) !important; }
+.prose code { font-family: var(--mono); font-size: 0.9em; }
+
+.list { list-style: none; padding: 0; margin: 0; }
+.list > li { padding-block: var(--space-4); border-top: 1px solid var(--rule); }
+.list > li:last-child { border-bottom: 1px solid var(--rule); }
+.list a { color: var(--ink); text-decoration: none; display: block; }
+.list a:hover h2, .list a:hover h3 { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 0.2em; }
+.label { color: var(--star-4300); }
+article > * + * { margin-top: var(--space-4); }
+article > .prose, article > section { margin-top: var(--space-5); }
+article > section h2 { font-size: var(--step-0); }
+.list p { color: var(--muted); margin-top: var(--space-1); }
+
+/* Constellation as plain HTML: hosts grouped by layer, each marked with its star colour. */
+.layers { display: grid; gap: var(--space-5); }
+.layers h2 { font-size: var(--step-1); }
+.hosts { list-style: none; padding: 0; margin: var(--space-2) 0 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr)); gap: var(--space-2) var(--space-4); }
+.hosts li { display: flex; gap: var(--space-2); align-items: baseline; }
+.hosts li::before { content: ''; flex: none; width: 0.4rem; height: 0.4rem; border-radius: 50%; background: var(--star); transform: translateY(-0.1em); }
+.hosts span { color: var(--muted); }
+[data-layer='physical'] { --star: var(--layer-physical); }
+[data-layer='proxmox'] { --star: var(--layer-proxmox); }
+[data-layer='kubernetes'] { --star: var(--layer-kubernetes); }
+[data-layer='services'] { --star: var(--layer-services); }
+
+/* Resume: a wider two-column grid, scene dimmed nearly to black. */
+.resume .scene { opacity: 0.12; }
+.resume .column { max-width: 64rem; }
+.cv { display: grid; grid-template-columns: 12rem 1fr; gap: var(--space-4) var(--space-5); }
+.cv > h2 { font-size: var(--step-0); color: var(--muted); font-weight: 400; }
+.cv section > * + * { margin-top: var(--space-2); }
+.cv .entry + .entry { margin-top: var(--space-4); }
+.cv .when { color: var(--muted); }
+.cv ul { margin: var(--space-2) 0 0; padding-left: 1.1rem; }
+
+/* Look around: the column steps aside for the full scene. */
+[data-look] .column { visibility: hidden; }
+[data-look] .scene::after { opacity: 0; }
+
+/* Mobile: the column becomes a bottom sheet opening at ~40% height; scrolling drags it up
+   over the frozen scene. */
+@media (max-width: 48rem) {
+  .scene::after { background: linear-gradient(to bottom, transparent 45%, var(--ground) 60%); }
+  .masthead { position: absolute; inset: 0 0 auto; }
+  .column {
+    margin: 60svh 0 0;
+    max-width: none;
+    min-height: 40svh;
+    background: var(--ground);
+    border-top: 1px solid var(--rule);
+  }
+  h1 { font-size: var(--step-3); }
+  .cv { grid-template-columns: 1fr; gap: var(--space-2); }
+  .cv > h2 { margin-top: var(--space-4); }
 }
 
-h1, h2, h3 { font-weight: 600; line-height: 1.15; letter-spacing: -0.01em; text-wrap: balance; }
-
-.lede h1 { font-size: clamp(2.4rem, 6vw, 4rem); margin: 0.5rem 0 1rem; max-width: 16ch; }
-.lede p.standfirst { font-size: 1.3rem; color: var(--muted); max-width: var(--measure); margin: 0; }
-
-.section { margin-top: 4rem; border-top: 1px solid var(--rule); padding-top: 1.25rem; }
-
-.index { list-style: none; padding: 0; margin: 1rem 0 0; }
-.index li { padding-block: 1.25rem; border-bottom: 1px solid var(--rule); }
-.index a { color: var(--ink); text-decoration: none; }
-.index a:hover h3 { color: var(--accent); }
-.index h3 { font-size: 1.5rem; margin: 0.25rem 0 0.35rem; }
-.index p { margin: 0; color: var(--muted); max-width: var(--measure); }
-
-.two-col { display: grid; gap: 2rem; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); margin-top: 1rem; }
-.two-col h3 { font-size: 1.1rem; margin: 0 0 0.25rem; }
-.two-col p { margin: 0; color: var(--muted); }
-
-.essay header { max-width: var(--measure); margin-inline: auto; margin-bottom: 2.5rem; }
-.essay h1 { font-size: clamp(2rem, 5vw, 3rem); margin: 0.5rem 0 0.75rem; }
-.essay .dek { font-size: 1.25rem; color: var(--muted); margin: 0 0 1rem; }
-
-.prose { max-width: var(--measure); margin-inline: auto; }
-.prose h2 { font-size: 1.5rem; margin-top: 2.5rem; }
-.prose > p:first-of-type::first-letter {
-  float: left;
-  font-size: 3.4em;
-  line-height: 0.85;
-  padding: 0.08em 0.1em 0 0;
-  color: var(--accent);
+@media (prefers-reduced-motion: reduce) {
+  .scene::after { transition: none; }
 }
-.prose blockquote { margin: 2rem 0; padding-left: 1.25rem; border-left: 2px solid var(--accent); font-style: italic; color: var(--muted); }
-.prose code { font: 0.85em/1 ui-monospace, 'SF Mono', Menlo, monospace; background: color-mix(in srgb, var(--rule) 45%, transparent); padding: 0.1em 0.3em; border-radius: 3px; }
 
-.colophon { border-top: 1px solid var(--rule); padding-block: 1.5rem 3rem; font: 0.85rem/1.5 var(--sans); color: var(--muted); }
-.index li:last-child { border-bottom: 0; }
+@media print {
+  :root { --ink: #000; --muted: #444; --rule: #bbb; --link: #000; }
+  body { background: #fff; }
+  .scene, .masthead nav, .look { display: none; }
+  .masthead, .column, .resume .column { padding: 0; margin: 0; max-width: none; }
+  .column { margin-top: 1rem; min-height: 0; border: 0; background: none; }
+  .cv { grid-template-columns: 9rem 1fr; }
+}
+
+/* /tokens review page only. */
+.swatches { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(8rem, 1fr)); gap: var(--space-3); }
+.swatches li::before { content: ''; display: block; height: 3rem; margin-bottom: var(--space-1); background: var(--swatch); border: 1px solid var(--rule); }
+.swatches code { font-family: var(--mono); font-size: var(--step--1); color: var(--muted); }

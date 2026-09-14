@@ -1,0 +1,108 @@
+# THALES as the constellation. Hand-maintained; change by PR.
+#
+# Disclosure boundary (spec §4): hostnames, roles, logical links and product names only.
+# The schema in src/content.config.ts has no field for addresses, VLAN IDs, ports or
+# versions, and rejects role text that looks like one.
+#
+# layer: physical | proxmox | kubernetes | services
+# waypoints: galaxy-scale positions of the places; documentation is the core.
+
+nodes:
+  # physical
+  - { id: leonidas, role: Gateway and firewall, layer: physical }
+  - { id: bias, role: Core switch, layer: physical }
+  - { id: thales-01, role: Proxmox node, layer: physical }
+  - { id: thales-02, role: Proxmox node, layer: physical }
+  - { id: thales-03, role: Proxmox node, layer: physical }
+  - { id: solon, role: NAS, layer: physical }
+
+  # proxmox guests
+  - { id: timaeus, role: Domain controller, layer: proxmox }
+  - { id: simmias, role: Domain controller, layer: proxmox }
+  - { id: gorgias, role: Certificate authority, layer: proxmox }
+  - { id: cratylus-01, role: DNS resolver, layer: proxmox }
+  - { id: cratylus-02, role: DNS resolver, layer: proxmox }
+  - { id: cratylus-03, role: DNS resolver, layer: proxmox }
+  - { id: hippodamus, role: Management host, layer: proxmox }
+  - { id: hippias, role: Subnet router, layer: proxmox }
+  - { id: zeno, role: Container registry, layer: proxmox }
+  - { id: pittacus, role: Backup server, layer: proxmox }
+  - { id: chilon, role: Syslog, layer: proxmox }
+  - { id: aristophanes, role: Media server, layer: proxmox }
+  - { id: odysseus, role: AI workspace, layer: proxmox }
+
+  # kubernetes
+  - { id: anaximander-cp1, role: Control plane, layer: kubernetes }
+  - { id: anaximander-cp2, role: Control plane, layer: kubernetes }
+  - { id: anaximander-cp3, role: Control plane, layer: kubernetes }
+  - { id: anaximander-w1, role: Worker, layer: kubernetes }
+  - { id: anaximander-w2, role: Worker, layer: kubernetes }
+  - { id: anaximander-w3, role: Worker, layer: kubernetes }
+  - { id: anaximander-w4, role: Worker, layer: kubernetes }
+
+  # services
+  - { id: flux, role: GitOps, layer: services }
+  - { id: jenkins, role: CI, layer: services }
+  - { id: flagger, role: Progressive delivery, layer: services }
+  - { id: authentik, role: SSO, layer: services }
+  - { id: vault, role: Secrets, layer: services }
+  - { id: prometheus, role: Metrics, layer: services }
+  - { id: loki, role: Logs, layer: services }
+  - { id: grafana, role: Dashboards, layer: services }
+  - { id: ceph, role: Block storage, layer: services }
+
+links:
+  # physical
+  - { from: leonidas, to: bias }
+  - { from: bias, to: thales-01 }
+  - { from: bias, to: thales-02 }
+  - { from: bias, to: thales-03 }
+  - { from: bias, to: solon }
+
+  # guests on their hosts
+  - { from: thales-01, to: timaeus }
+  - { from: thales-01, to: gorgias }
+  - { from: thales-01, to: cratylus-01 }
+  - { from: thales-01, to: hippodamus }
+  - { from: thales-01, to: anaximander-cp1 }
+  - { from: thales-02, to: simmias }
+  - { from: thales-02, to: cratylus-02 }
+  - { from: thales-02, to: hippias }
+  - { from: thales-02, to: zeno }
+  - { from: thales-02, to: anaximander-cp2 }
+  - { from: thales-02, to: anaximander-w2 }
+  - { from: thales-03, to: cratylus-03 }
+  - { from: thales-03, to: pittacus }
+  - { from: thales-03, to: chilon }
+  - { from: thales-03, to: aristophanes }
+  - { from: thales-03, to: odysseus }
+  - { from: thales-03, to: anaximander-cp3 }
+  - { from: thales-03, to: anaximander-w1 }
+  - { from: thales-03, to: anaximander-w3 }
+  - { from: thales-03, to: anaximander-w4 }
+
+  # storage
+  - { from: ceph, to: thales-01 }
+  - { from: ceph, to: thales-02 }
+  - { from: ceph, to: thales-03 }
+  - { from: pittacus, to: solon }
+
+  # logical
+  - { from: timaeus, to: simmias }
+  - { from: timaeus, to: cratylus-01 }
+  - { from: hippodamus, to: anaximander-cp1 }
+  - { from: jenkins, to: zeno }
+  - { from: jenkins, to: flux }
+  - { from: flux, to: anaximander-cp1 }
+  - { from: flux, to: flagger }
+  - { from: authentik, to: timaeus }
+  - { from: authentik, to: anaximander-w4 }
+  - { from: grafana, to: prometheus }
+  - { from: grafana, to: loki }
+  - { from: grafana, to: authentik }
+
+waypoints:
+  - { id: constellation, pos: [5.2, 0.1, -3.1], focus: [anaximander-cp1] }
+  - { id: incidents, pos: [-4.4, -0.05, 4.8], focus: [] }
+  - { id: gitops, pos: [3.6, 0.15, 5.9], focus: [flux] }
+  - { id: documentation, pos: [0, 0, 0] }
