@@ -6,7 +6,7 @@ interface Props {
   description?: string;
 }
 
-const { title, description = 'Jason Harker — cloud engineer. Notes on platforms, infrastructure, and the history of ideas.' } = Astro.props;
+const { title, description = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit.' } = Astro.props;
 const fullTitle = title ? `${title} — Jason Harker` : 'Jason Harker';
 const path = Astro.url.pathname;
 const nav = [
@@ -38,8 +38,8 @@ const nav = [
     </main>
     <footer class="colophon">
       <p>
-        Built with Astro, deployed blue/green by Flagger onto a Kubernetes cluster I run at home.
-        The previous site lives on at <a href="https://testing.jasonharker.com">the archive</a>.
+        Lorem ipsum dolor sit amet, consectetur adipiscing elit.
+        <a href="https://testing.jasonharker.com">Archive</a>.
       </p>
     </footer>
   </body>
