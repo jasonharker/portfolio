@@ -1,4 +1,6 @@
 ---
+import { getEntry } from 'astro:content';
+import { ClientRouter } from 'astro:transitions';
 import '../styles/site.css';
 
 interface Props {
@@ -17,6 +19,9 @@ const nav = [
   { href: '/documentation/', label: 'Documentation' },
   { href: '/resume/', label: 'Resume' },
 ];
+// A JSON data block is never executed, so script-src 'self' allows it. Escape '<' so no
+// value can close the tag.
+const topology = JSON.stringify((await getEntry('topology', 'thales'))!.data).replace(/</g, '\\u003c');
 ---
 <!doctype html>
 <html lang="en">
@@ -28,9 +33,12 @@ const nav = [
     {noindex && <meta name="robots" content="noindex" />}
     <title>{fullTitle}</title>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <ClientRouter />
   </head>
   <body class={bodyClass}>
-    <div class="scene" aria-hidden="true"></div>
+    <div class="scene" aria-hidden="true" transition:persist="scene"><canvas></canvas></div>
+    <div class="scene-labels" transition:persist="scene-labels"></div>
+    <script type="application/json" id="topology" is:inline set:html={topology} />
     <header class="masthead">
       <a class="wordmark" href="/" aria-current={path === '/' ? 'page' : undefined}>Jason Harker</a>
       <nav aria-label="Primary">
@@ -44,14 +52,29 @@ const nav = [
       <slot />
     </main>
     <script>
-      const button = document.querySelector<HTMLButtonElement>('.look')!;
+      // Runs once; ClientRouter swaps the page around it. Listeners on swapped elements
+      // rebind on astro:page-load, listeners on document bind once.
       const set = (on: boolean) => {
         document.documentElement.toggleAttribute('data-look', on);
+        const button = document.querySelector<HTMLButtonElement>('.look')!;
         button.setAttribute('aria-pressed', String(on));
         button.textContent = on ? 'Back to reading' : 'Look around';
       };
-      button.addEventListener('click', () => set(!document.documentElement.hasAttribute('data-look')));
+      document.addEventListener('astro:page-load', () => {
+        document.querySelector('.look')!.addEventListener('click', () => set(!document.documentElement.hasAttribute('data-look')));
+      });
       document.addEventListener('keydown', (e) => e.key === 'Escape' && set(false));
+
+      // The scene, after first paint and only past the gates (spec §5). Never by device class.
+      // Reduced motion still gets the scene, as still frames.
+      addEventListener('load', async () => {
+        if ((navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData) return;
+        const canvas = document.querySelector<HTMLCanvasElement>('.scene canvas')!;
+        const gl = canvas.getContext('webgl2', { antialias: false, powerPreference: 'high-performance' });
+        if (!gl) return;
+        const { start } = await import('../scene/index');
+        start(canvas, gl, document.querySelector('.scene-labels')!);
+      }, { once: true });
     </script>
   </body>
 </html>
