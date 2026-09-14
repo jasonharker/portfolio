@@ -53,7 +53,7 @@ export function start(canvas: HTMLCanvasElement, gl: WebGL2RenderingContext, lab
 
   const debug: SceneDebug = {
     born: Math.random().toString(36).slice(2),
-    canvas, webgl2: true, frames: 0, contextLost: 0,
+    canvas, webgl2: true, frames: 0, contextLost: 0, flying: false,
     path: location.pathname, place: placeFor(location.pathname),
     instantAt: location.pathname, flights: [],
     get idle() { return loop.idle; },
@@ -63,7 +63,7 @@ export function start(canvas: HTMLCanvasElement, gl: WebGL2RenderingContext, lab
   (window as unknown as { __scene: SceneDebug }).__scene = debug;
 
   const loop = createLoop((dt) => {
-    const flying = director.update(dt);
+    const flying = (debug.flying = director.update(dt));
     const moving = active?.update(dt) ?? false;
     active?.render(renderer, camera);
     debug.frames++;

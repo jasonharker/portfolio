@@ -74,6 +74,7 @@ export interface SceneDebug {
   place: PlaceId | 'resume';
   instantAt: string | null; // path of the deep link the scene opened at; cleared by the first flight
   flights: string[]; // every non-instant goTo, in order
+  flying: boolean; // the director reported a flight in progress on the last frame
   idle: boolean; // no frame is scheduled
   paused: boolean;
 }
