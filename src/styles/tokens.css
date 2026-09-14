@@ -1,0 +1,67 @@
+/* Design tokens (spec §6). Draft for review on /tokens before any scene code.
+ *
+ * Principles
+ * 1. The page is night sky; text sits on it, never on a card.
+ * 2. Colour comes from physics: accents are stars, sampled along the blackbody curve.
+ * 3. One reading column, plain words; the scene carries the spectacle, the type does not.
+ * 4. Nothing decorates: no uppercase labels, shadows, rounded boxes, gradients on text, or arrows.
+ */
+
+:root {
+  color-scheme: dark;
+
+  /* Ground and ink. The ground is the scene's sky, a deep blue-black, not #000. */
+  --ground: #0a0d16;
+  --ground-raised: #111626;
+  --ink: #e6e9f2;
+  --muted: #9aa2b8;
+  --rule: #262c3f;
+
+  /* Blackbody accents, all at OKLab L 0.82 so none shouts louder than another.
+   * Kelvin in the name; spectral class in the comment. */
+  --star-30000: #a4c4ff; /* O */
+  --star-12000: #b0c4ef; /* B */
+  --star-8500: #b9c4e0;  /* A */
+  --star-6800: #c6c2cb;  /* F */
+  --star-5600: #d0c1b4;  /* G */
+  --star-4300: #e4bb9a;  /* K */
+  --star-3000: #feb16d;  /* M */
+
+  /* Roles. Constellation layers use the same values as their stars. */
+  --link: var(--star-12000);
+  --layer-physical: var(--star-3000);
+  --layer-proxmox: var(--star-4300);
+  --layer-kubernetes: var(--star-5600);
+  --layer-services: var(--star-12000);
+
+  /* Type. System fonts only: humanist sans for reading, mono only for real code. */
+  --sans: Seravek, 'Gill Sans Nova', Ubuntu, Calibri, 'DejaVu Sans', source-sans-pro, sans-serif;
+  --mono: ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, Consolas, 'DejaVu Sans Mono', monospace;
+
+  /* Scale, ratio 1.25 from a 1.0625rem body. */
+  --step--1: 0.85rem;
+  --step-0: 1.0625rem;
+  --step-1: 1.33rem;
+  --step-2: 1.66rem;
+  --step-3: 2.07rem;
+  --step-4: 2.59rem;
+
+  /* Space, 4px base. */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 1rem;
+  --space-4: 1.5rem;
+  --space-5: 2.5rem;
+  --space-6: 4rem;
+
+  --measure: 38rem;
+}
+
+@media (prefers-contrast: more) {
+  :root {
+    --ground: #05070c;
+    --ink: #fff;
+    --muted: #d6dbe8;
+    --rule: #7c85a0;
+  }
+}
