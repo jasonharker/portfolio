@@ -1,0 +1,36 @@
+/* Constellation labels (src/scene/labels.ts). The .scene-labels layer is fixed over the canvas
+   with pointer-events off; each label turns them back on so its text can be selected or tapped.
+   labels.ts moves a label's origin onto its star with `transform`; `translate` sets the text
+   just right of the star, centred on it. */
+.constellation-labels { position: absolute; inset: 0; overflow: hidden; contain: strict; }
+.scene-label {
+  position: absolute;
+  left: 0;
+  top: 0;
+  translate: 0.9rem -50%;
+  pointer-events: auto;
+  white-space: nowrap;
+  font-size: var(--step--1);
+  line-height: 1.25;
+  color: var(--ink);
+  will-change: transform;
+}
+.scene-label > span { display: block; }
+.scene-label > .role { font-size: 0.75rem; color: var(--muted); }
+.scene-label:hover > .host { color: var(--star); }
+.scene-label[data-layer='physical'] { --star: var(--layer-physical); }
+.scene-label[data-layer='proxmox'] { --star: var(--layer-proxmox); }
+.scene-label[data-layer='kubernetes'] { --star: var(--layer-kubernetes); }
+.scene-label[data-layer='services'] { --star: var(--layer-services); }
+
+/* Resume dims the scene; the labels dim with it. */
+.resume .scene-labels { opacity: 0.12; }
+
+@media print {
+  .scene-labels { display: none; }
+}
+
+/* Narrow screens: hostnames only. */
+@media (max-width: 48rem) {
+  .scene-label > .role { display: none; }
+}
