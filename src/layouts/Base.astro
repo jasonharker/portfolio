@@ -1,0 +1,46 @@
+---
+import '../styles/site.css';
+
+interface Props {
+  title?: string;
+  description?: string;
+}
+
+const { title, description = 'Jason Harker — cloud engineer. Notes on platforms, infrastructure, and the history of ideas.' } = Astro.props;
+const fullTitle = title ? `${title} — Jason Harker` : 'Jason Harker';
+const path = Astro.url.pathname;
+const nav = [
+  { href: '/', label: 'Home' },
+  { href: '/writing/', label: 'Writing' },
+  { href: '/about/', label: 'About' },
+];
+---
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content={description} />
+    <title>{fullTitle}</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  </head>
+  <body>
+    <header class="masthead">
+      <a class="wordmark" href="/">Jason Harker</a>
+      <nav aria-label="Primary">
+        {nav.map((item) => (
+          <a href={item.href} aria-current={path === item.href ? 'page' : undefined}>{item.label}</a>
+        ))}
+      </nav>
+    </header>
+    <main>
+      <slot />
+    </main>
+    <footer class="colophon">
+      <p>
+        Built with Astro, deployed blue/green by Flagger onto a Kubernetes cluster I run at home.
+        The previous site lives on at <a href="https://testing.jasonharker.com">the archive</a>.
+      </p>
+    </footer>
+  </body>
+</html>
