@@ -47,14 +47,27 @@ spec:
         stage('Build Image') {
             when { branch 'main' }
             steps {
-                container('kaniko') {
-                    script {
-                        def shortCommit = GIT_COMMIT.take(8)
+                script {
+                    def shortCommit = GIT_COMMIT.take(8)
+                    // "Topology as of <date>" (spec §4). Kaniko's context has no .git, so read it here.
+                    // A shallow clone would report HEAD's date for the file, so emit nothing (the
+                    // site shows "unknown") unless full history is present.
+                    def topologyDate = ''
+                    container('git') {
+                        topologyDate = sh(returnStdout: true, script: '''
+                            g() { git -c safe.directory="$PWD" "$@"; }
+                            if [ "$(g rev-parse --is-shallow-repository)" = true ]; then g fetch --quiet --unshallow || true; fi
+                            if [ "$(g rev-parse --is-shallow-repository)" = false ]; then g log -1 --format=%cs -- src/data/topology.yaml; fi
+                        ''').trim()
+                    }
+                    echo "Topology as of: ${topologyDate ?: 'unknown'}"
+                    container('kaniko') {
                         sh """
                             /kaniko/executor \\
                                 --context=\$(pwd) \\
                                 --dockerfile=Dockerfile \\
                                 --destination=${REGISTRY}/${IMAGE_NAME}:${shortCommit} \\
+                                --build-arg=TOPOLOGY_DATE=${topologyDate} \\
                                 --insecure \\
                                 --skip-tls-verify \\
                                 --cache=true \\
