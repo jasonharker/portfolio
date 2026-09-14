@@ -1,0 +1,25 @@
+---
+import Base from '../../layouts/Base.astro';
+
+const essays = Object.values(import.meta.glob('./*.md', { eager: true }))
+  .map((mod: any) => ({ ...mod.frontmatter, url: mod.url }))
+  .sort((a, b) => b.date.localeCompare(a.date));
+---
+<Base title="Writing">
+  <section class="lede">
+    <p class="kicker">Writing</p>
+    <h1>Field notes</h1>
+    <p class="standfirst">Case studies from THALES and lessons that carried over to work.</p>
+  </section>
+  <ul class="index">
+    {essays.map((e) => (
+      <li>
+        <a href={e.url}>
+          <p class="kicker">{e.kicker} · {new Date(e.date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', timeZone: 'UTC' })}</p>
+          <h3>{e.title}</h3>
+          <p>{e.dek}</p>
+        </a>
+      </li>
+    ))}
+  </ul>
+</Base>

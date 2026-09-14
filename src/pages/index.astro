@@ -1,0 +1,51 @@
+---
+import Base from '../layouts/Base.astro';
+
+const essays = Object.values(import.meta.glob('./writing/*.md', { eager: true }))
+  .map((mod: any) => ({ ...mod.frontmatter, url: mod.url }))
+  .sort((a, b) => b.date.localeCompare(a.date));
+---
+<Base>
+  <section class="lede">
+    <p class="kicker">Cloud engineer · Las Vegas</p>
+    <h1>I build platforms at work and a private cloud at home.</h1>
+    <p class="standfirst">
+      By day I run Kubernetes on Azure for a mobile sportsbook. By night I run THALES, a homelab
+      built so every technology I meet at work has already been built, broken and understood
+      at home. This is where I write up what both teach me.
+    </p>
+  </section>
+
+  <section class="section">
+    <p class="section-label">Writing</p>
+    <ul class="index">
+      {essays.map((e) => (
+        <li>
+          <a href={e.url}>
+            <p class="kicker">{e.kicker}</p>
+            <h3>{e.title}</h3>
+            <p>{e.dek}</p>
+          </a>
+        </li>
+      ))}
+    </ul>
+  </section>
+
+  <section class="section">
+    <p class="section-label">Now</p>
+    <div class="two-col">
+      <div>
+        <h3>At work</h3>
+        <p>Cloud Engineer at Circa Las Vegas — AKS, GitOps with Flux and Helm, and New Relic observability.</p>
+      </div>
+      <div>
+        <h3>At home</h3>
+        <p>A seven-node Talos Kubernetes cluster on Proxmox and Ceph, reconciled entirely from git.</p>
+      </div>
+      <div>
+        <h3>Studying</h3>
+        <p>A+, Network+ and Security+ behind me; Azure (AZ-900, then AZ-104) next.</p>
+      </div>
+    </div>
+  </section>
+</Base>
