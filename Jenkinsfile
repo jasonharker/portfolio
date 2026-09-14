@@ -96,7 +96,7 @@ spec:
 
                                 git clone ${MANIFEST_REPO} k8s-manifests
                                 cd k8s-manifests
-                                sed -i 's|image: ${REGISTRY}/${IMAGE_NAME}:.*|image: ${REGISTRY}/${IMAGE_NAME}:${shortCommit}|' ${MANIFEST_FILE}
+                                sed -i 's|image: .* # portfolio-image\$|image: ${REGISTRY}/${IMAGE_NAME}:${shortCommit} # portfolio-image|' ${MANIFEST_FILE}
                                 git diff ${MANIFEST_FILE}
                                 git add ${MANIFEST_FILE}
                                 git commit -m "🚀 Stage ${IMAGE_NAME}:${shortCommit} (build #${BUILD_NUMBER})" || echo "No changes to commit"
