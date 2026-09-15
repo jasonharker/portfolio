@@ -3,6 +3,8 @@ import { getEntry } from 'astro:content';
 import Base from '../layouts/Base.astro';
 
 const { nodes } = (await getEntry('topology', 'thales'))!.data;
+// Last commit date of topology.yaml, passed in by Jenkins (.git isn't in the build context). || not ??: Jenkins may pass ''.
+const asOf = import.meta.env.TOPOLOGY_DATE || 'unknown';
 const layers = [
   { id: 'physical', name: 'Physical' },
   { id: 'proxmox', name: 'Proxmox' },
@@ -28,4 +30,5 @@ const layers = [
       </section>
     ))}
   </div>
+  <p class="dek">Topology as of {asOf}</p>
 </Base>

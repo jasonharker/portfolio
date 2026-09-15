@@ -1,11 +1,10 @@
 // Galaxy tier (spec §3): the whole disc, tilted, bulge brightest, the places as marked points. Nothing to read.
 // Draw calls: disc haze, bulge glow, stars (one Points), place markers (one Points), plus bloom's passes.
 import * as THREE from 'three';
-import { DISC_RADIUS, galaxyModel } from '../galaxy-model';
+import { DISC_RADIUS, galaxyModel, SEED } from '../galaxy-model';
 import { createBloom, type Bloom } from '../post/bloom';
 import type { CameraPose, PlaceId, SceneContext, Tier, Waypoint } from '../types';
 
-const SEED = 20260914;
 const ELEVATION = (35 * Math.PI) / 180; // camera height above the disc plane
 const FOV = 50;
 const PAN = 0.3; // how far toward a place the frame's centre moves, so pans between places read

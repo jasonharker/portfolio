@@ -5,6 +5,8 @@
 # versions, and rejects role text that looks like one.
 #
 # layer: physical | proxmox | kubernetes | services
+# pos (optional star override): constellation-local, x ±1.4, y ±1.05 (physical low, services
+# high), z toward the viewer.
 # waypoints: galaxy-scale positions of the places, units ≈ kpc, disc in the XZ plane (radius
 # ~15), core at the origin. documentation is the core; the others sit ~120° apart and the
 # spiral arms are bent through them.

@@ -14,6 +14,8 @@ export interface GalaxyModel {
 }
 
 export const DISC_RADIUS = 15;
+/** The one galaxy: both tiers pass this so the Region backdrop matches the Galaxy tier. */
+export const SEED = 20260914;
 const CORE = 1; // waypoints closer than this to the axis are the core, not an arm
 const TAU = Math.PI * 2;
 

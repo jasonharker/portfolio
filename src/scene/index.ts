@@ -2,12 +2,13 @@
 // once the gates there have passed, so everything three.js pulls in stays in this chunk.
 import * as THREE from 'three';
 import { topology } from './data';
-import { createDirector } from './flight.stub';
+import { createFlight } from './flight';
 import { createLoop } from './loop';
 import { quality } from './quality';
+import { createStill } from './reduced-motion';
 import { placeFor } from './routes';
-import { galaxy } from './tiers/galaxy.stub';
-import { region } from './tiers/region.stub';
+import { galaxy } from './tiers/galaxy';
+import { region } from './tiers/region';
 import type { CameraPose, Scene, SceneContext, SceneDebug, Tier, TierId } from './types';
 
 export function start(canvas: HTMLCanvasElement, gl: WebGL2RenderingContext, labels: HTMLElement): Scene {
@@ -27,7 +28,7 @@ export function start(canvas: HTMLCanvasElement, gl: WebGL2RenderingContext, lab
   let active: Tier | null = null;
   let pose: CameraPose = { position: [0, 0, 1], target: [0, 0, 0], fov: 50 };
 
-  const director = createDirector({
+  const director = (quality.reducedMotion ? createStill : createFlight)({
     ctx,
     tier: (id) => {
       if (!loading.has(id)) loading.set(id, tiers[id].load(ctx).then(() => (tiers[id].resize?.(innerWidth, innerHeight), tiers[id])));

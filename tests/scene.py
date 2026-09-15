@@ -136,7 +136,7 @@ def settle(page):
 
 IPV4 = re.compile(r'(?<![\d.])(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)(?:/\d{1,2})?(?![\d.])')
 # host:port with a hostname, address or IPv6 bracket in front. Safe on minified JS and CSS.
-HOST_PORT = re.compile(r'(?i)(?:\blocalhost|\b[a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:local|lan|internal|home|arpa|com|net|org|io|dev|app)|(?<![\d.])\d{1,3}(?:\.\d{1,3}){3}|\])\:\d{1,5}\b')
+HOST_PORT = re.compile(r'(?i)(?:\blocalhost|\b[a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:local|lan|internal|home|arpa|com|net|org|io|dev|app)|(?<![\d.])\d{1,3}(?:\.\d{1,3}){3}|\[[0-9a-f]*:[0-9a-f:]*\])\:\d{1,5}\b')
 PORT_WORD = re.compile(r'(?i)\bports?[\s:=#]+\d{2,5}\b')
 # Any word:digits. Too noisy for minified JS ({aqua:65535}) and CSS (font-weight:600).
 BARE_PORT = re.compile(r'(?i)(?<=[a-z0-9\]_-])\:\d{2,5}\b')

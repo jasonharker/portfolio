@@ -6,12 +6,10 @@
 // Units are galaxy units (≈ kpc), so waypoint positions from topology.yaml are used directly.
 import * as THREE from 'three';
 import { createConstellation, type Constellation } from '../constellation';
-import { galaxyModel } from '../galaxy-model';
+import { galaxyModel, SEED } from '../galaxy-model';
 import { createLabels, type Labels } from '../labels';
 import type { CameraPose, PlaceId, SceneContext, Tier, Waypoint } from '../types';
 
-// ponytail: the seed the Galaxy tier uses; must match galaxy.ts so both tiers show one galaxy.
-const SEED = 1;
 const DISTANCE = 2.2; // camera to the framed place; ~3.5 wide at 16:9, a tenth of the disc
 const CORE_DISTANCE = 4.5; // the core (documentation) is larger than a tenth; stand back to see the bulge
 const ELEVATION = THREE.MathUtils.degToRad(24);
