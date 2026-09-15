@@ -5,7 +5,7 @@ export const quality: Quality = {
   dpr: Math.min(devicePixelRatio, 1.5),
   stars: 60000,
   regionStars: 150000,
-  deepField: 9000,
+  deepField: 24000,
   foreground: 40,
   brightStars: 1200,
   dustScale: 0.5,
