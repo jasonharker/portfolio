@@ -8,6 +8,7 @@
 // labels would overlap. A node's optional `pos:` is taken as its local position and never
 // moved. Deterministic: the same YAML gives the same sky.
 import * as THREE from 'three';
+import { additive, SPIKES, vivid } from './jwst';
 import type { Layer, SceneContext, Topology, Vec3 } from './types';
 
 export const LAYERS: Layer[] = ['physical', 'proxmox', 'kubernetes', 'services'];
@@ -90,28 +91,52 @@ export function layout(topology: Topology): Map<string, THREE.Vector3> {
   return new Map(stars.map((s) => [s.id, s.p]));
 }
 
+const HOVER_S = 0.15; // hover glow eases in and out over this
+const SIZE = 110; // sprite CSS px at the framing distance; the core is a fraction, the rest is spikes
+
 const vertex = /* glsl */ `
   attribute vec3 tint;
+  attribute vec2 life; // twinkle phase 0..1, hover glow 0..1
   uniform float size;
   uniform float near;
+  uniform float uTime;
   varying vec3 vColor;
+  varying float vPx;
+  varying float vHeat;
+  varying float vNear;
   void main() {
-    vColor = tint;
     vec4 mv = modelViewMatrix * vec4(position, 1.0);
     gl_Position = projectionMatrix * mv;
     // Full size at the framing distance; shrinks from afar so the lab doesn't read as one blob.
-    gl_PointSize = size * clamp(near / -mv.z, 0.12, 1.0);
+    float k = clamp(near / -mv.z, 0.12, 1.0);
+    float px = size * k * (1.0 + 0.3 * life.y);
+    gl_PointSize = px;
+    vPx = px * 0.5;
+    vHeat = life.y;
+    float twinkle = 1.0 + 0.13 * sin(uTime * (0.9 + 0.8 * life.x) + life.x * 40.0) * sin(uTime * 0.37 + life.x * 17.0);
+    vColor = tint * twinkle;
+    vNear = k;
   }
 `;
 const fragment = /* glsl */ `
+  ${SPIKES}
+  uniform float dpr;
+  uniform float size;
   varying vec3 vColor;
+  varying float vPx;
+  varying float vHeat;
+  varying float vNear;
   void main() {
-    float r = length(gl_PointCoord - 0.5) * 2.0;
-    float core = smoothstep(0.34, 0.22, r);
-    float halo = pow(max(0.0, 1.0 - r), 2.5) * 0.55;
-    float a = core + halo;
-    if (a < 0.003) discard;
-    gl_FragColor = vec4(mix(vColor, vec3(1.0), core * 0.35) * a, 1.0);
+    vec2 p = gl_PointCoord * 2.0 - 1.0;
+    vec2 k = spikes(p, vPx, 0.55 + 0.3 * vHeat);
+    float r = length(p) * size * 0.5 / dpr; // CSS px from the centre at full size: the core shrinks with the sprite
+    // A soft core in the layer's colour under the PSF's white-hot centre, and a wider halo when hovered.
+    float core = exp(-r * r / 12.0);
+    float halo = exp(-r / (4.0 + 5.0 * vHeat)) * (0.22 + 0.55 * vHeat) * smoothstep(1.0, 0.6, length(p));
+    vec3 c = vec3(1.0) * (k.x + core * 0.5) * (1.2 + 0.6 * vHeat) + vColor * (core * 1.3 + halo + k.y * (1.8 + 1.0 * vHeat));
+    // From afar the lab is a faint figure, not a bright clump.
+    float far = mix(0.25, 1.0, vNear * vNear);
+    gl_FragColor = vec4(c * far * smoothstep(1.0, 0.8, length(p)), 1.0);
     #include <colorspace_fragment>
   }
 `;
@@ -124,6 +149,8 @@ export interface Constellation {
   resize(dpr: number): void;
   /** Dim the links with camera distance, as the stars shrink, so from afar the lab is a faint figure. */
   fade(cameraDistance: number): void;
+  /** Advance the twinkle and ease the hover glow toward `hot`. true while easing. */
+  update(dt: number, hot: string | null): boolean;
   dispose(): void;
 }
 
@@ -139,39 +166,42 @@ export function createConstellation(ctx: SceneContext, centre: THREE.Vector3, sc
 
   const positions = new Float32Array(n * 3);
   const colours = new Float32Array(n * 3);
-  const tint = new Map(LAYERS.map((l) => [l, ctx.colour(`--layer-${l}`)]));
+  const life = new Float32Array(n * 2);
+  const tint = new Map(LAYERS.map((l) => [l, vivid(ctx.colour(`--layer-${l}`), 2.4)]));
   topology.nodes.forEach((node, i) => {
     local.get(node.id)!.toArray(positions, i * 3);
     tint.get(node.layer)!.toArray(colours, i * 3);
+    life[i * 2] = hash(node.id) / 4294967296;
   });
 
   const starGeometry = new THREE.BufferGeometry();
   starGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
   starGeometry.setAttribute('tint', new THREE.BufferAttribute(colours, 3));
-  const starMaterial = new THREE.ShaderMaterial({
-    uniforms: { size: { value: 22 }, near: { value: viewDistance } },
-    vertexShader: vertex,
-    fragmentShader: fragment,
-    blending: THREE.AdditiveBlending,
-    depthTest: false,
-    depthWrite: false,
-  });
+  const lifeAttribute = new THREE.BufferAttribute(life, 2);
+  starGeometry.setAttribute('life', lifeAttribute);
+  const uniforms = { size: { value: SIZE }, near: { value: viewDistance }, uTime: { value: 0 }, dpr: { value: 1 } };
+  const starMaterial = new THREE.ShaderMaterial({ uniforms, vertexShader: vertex, fragmentShader: fragment, ...additive });
   const stars = new THREE.Points(starGeometry, starMaterial);
   stars.frustumCulled = false;
   stars.renderOrder = 3;
 
+  // Links carry their brightness in their vertex colours: a hovered star lights the links it has.
   const index = new Map(topology.nodes.map((node, i) => [node.id, i]));
   const segments = new Float32Array(topology.links.length * 6);
   topology.links.forEach((l, i) => {
     local.get(l.from)!.toArray(segments, i * 6);
     local.get(l.to)!.toArray(segments, i * 6 + 3);
   });
+  const link = vivid(ctx.colour('--link'), 1.6);
+  const linkColours = new Float32Array(segments.length);
   const lineGeometry = new THREE.BufferGeometry();
   lineGeometry.setAttribute('position', new THREE.BufferAttribute(segments, 3));
+  const linkAttribute = new THREE.BufferAttribute(linkColours, 3);
+  lineGeometry.setAttribute('color', linkAttribute);
   const lineMaterial = new THREE.LineBasicMaterial({
-    color: ctx.colour('--link'),
+    vertexColors: true,
     transparent: true,
-    opacity: 0.32,
+    opacity: 1,
     blending: THREE.AdditiveBlending,
     depthTest: false,
     depthWrite: false,
@@ -179,6 +209,22 @@ export function createConstellation(ctx: SceneContext, centre: THREE.Vector3, sc
   const lines = new THREE.LineSegments(lineGeometry, lineMaterial);
   lines.frustumCulled = false;
   lines.renderOrder = 2;
+
+  const heat = new Float32Array(n);
+  const paint = () => {
+    topology.links.forEach((l, i) => {
+      const k = 0.34 + 0.9 * Math.max(heat[index.get(l.from)!], heat[index.get(l.to)!]);
+      for (let v = 0; v < 6; v += 3) {
+        linkColours[i * 6 + v] = link.r * k;
+        linkColours[i * 6 + v + 1] = link.g * k;
+        linkColours[i * 6 + v + 2] = link.b * k;
+      }
+    });
+    linkAttribute.needsUpdate = true;
+    for (let i = 0; i < n; i++) life[i * 2 + 1] = heat[i];
+    lifeAttribute.needsUpdate = true;
+  };
+  paint();
 
   const group = new THREE.Group();
   group.add(lines, stars);
@@ -193,10 +239,25 @@ export function createConstellation(ctx: SceneContext, centre: THREE.Vector3, sc
       return out.fromArray(positions, index.get(id)! * 3).applyMatrix4(group.matrix);
     },
     resize(dpr) {
-      starMaterial.uniforms.size.value = 22 * dpr;
+      uniforms.size.value = SIZE * dpr;
+      uniforms.dpr.value = dpr;
     },
     fade(cameraDistance) {
-      lineMaterial.opacity = 0.32 * THREE.MathUtils.clamp(viewDistance / cameraDistance, 0.15, 1);
+      lineMaterial.opacity = THREE.MathUtils.clamp(viewDistance / cameraDistance, 0.15, 1);
+    },
+    update(dt, hot) {
+      // Under reduced motion there are no ambient frames; the twinkle holds still rather than jump.
+      if (!ctx.quality.reducedMotion) uniforms.uTime.value += dt;
+      const target = hot === null ? -1 : index.get(hot) ?? -1;
+      let easing = false;
+      for (let i = 0; i < n; i++) {
+        const to = i === target ? 1 : 0;
+        if (heat[i] === to) continue;
+        heat[i] = to > heat[i] ? Math.min(1, heat[i] + dt / HOVER_S) : Math.max(0, heat[i] - dt / HOVER_S);
+        easing = true;
+      }
+      if (easing) paint();
+      return easing;
     },
     dispose() {
       starGeometry.dispose();
