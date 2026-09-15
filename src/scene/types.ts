@@ -94,4 +94,7 @@ export interface SceneDebug {
   rate: 'full' | 'ambient' | 'idle'; // ambient: only the ≤30 fps idle animation is running
   hot: string | null; // the constellation star under the pointer, or null
   paused: boolean;
+  parallax: number; // eased mouse offset, 0 at rest, up to ~1.4 in a viewport corner
+  sway: number; // camera offset from the director's pose, as a fraction of view distance (parallax + drift)
+  hoverable: boolean; // the active tier implements hot()
 }

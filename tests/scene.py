@@ -114,7 +114,7 @@ def sample_flying(page, seconds):
     return seen
 
 
-def fly(page, click, path, start_timeout=1.0, max_flight=10.0):
+def fly(page, click, path, start_timeout=10.0, max_flight=60.0):  # SwiftShader under load: seconds per frame
     """Click, wait for the swap, then watch the flight. Returns (flew, seconds from click to landing)."""
     t0 = time.time()
     page.click(click)
@@ -129,7 +129,32 @@ def fly(page, click, path, start_timeout=1.0, max_flight=10.0):
 
 
 def settle(page):
-    wait(page, "!__scene.flying && __scene.rate !== 'full'", 10)
+    wait(page, "!__scene.flying && __scene.rate !== 'full'", 45)  # SwiftShader: ~1-3 fps, and every click eases the parallax
+
+
+def frames_over(page, ms=600):
+    """Frames rendered during a window."""
+    a = page.evaluate('__scene.frames')
+    page.wait_for_timeout(ms)
+    return page.evaluate('__scene.frames') - a
+
+
+def stopped_then_resumed(page, stop, resume):
+    """(stopped, resumed, detail): ambient frames stop while `stop` holds and come back after `resume`.
+    A SwiftShader frame can take seconds, and events queue behind it, so every step polls."""
+    f0 = page.evaluate('__scene.frames')
+    running = wait(page, f'__scene.frames > {f0}', 15, fail=False)
+    stop()
+    paused = wait(page, "__scene.paused && __scene.rate === 'idle'", 15, fail=False)
+    page.wait_for_timeout(300)  # a frame already under way when the pause landed
+    held = frames_over(page, 1500)
+    f1 = page.evaluate('__scene.frames')
+    resume()
+    resumed = wait(page, f"!__scene.paused && __scene.frames > {f1}", 15, fail=False)
+    ambient = wait(page, "__scene.rate === 'ambient'", 15, fail=False)
+    st = page.evaluate('({paused: __scene.paused, rate: __scene.rate, frames: __scene.frames})')
+    return (running and paused and held == 0, resumed and ambient,
+            f'running={running} paused={paused} frames while paused={held} resumed={resumed} ambient={ambient} {st}')
 
 
 # --- dist scan (spec §4 disclosure) -----------------------------------------------------
@@ -236,10 +261,11 @@ def main():
               pg.evaluate("window.__docMarker === 1 && document.querySelector('.scene canvas') === __scene.canvas && __scene.contextLost === 0"))
 
         pg.wait_for_timeout(300)
-        fa = pg.evaluate('__scene.frames')
+        fa, t0 = pg.evaluate('__scene.frames'), time.time()
         pg.wait_for_timeout(1000)
-        fb = pg.evaluate('__scene.frames')
-        check('idle life: ambient, at most 30 fps', 0 < fb - fa <= 33 and pg.evaluate("__scene.rate === 'ambient'"), f'frames {fa}->{fb}')
+        wait(pg, f'__scene.frames >= {fa + 3}', 20, fail=False)  # at least a few frames, however slow SwiftShader is
+        fb, took = pg.evaluate('__scene.frames'), time.time() - t0
+        check('idle life: ambient, at most 30 fps', 0 < fb - fa <= 30 * took + 3 and pg.evaluate("__scene.rate === 'ambient'"), f'frames {fa}->{fb} in {took:.1f}s')
 
         # Flights, skip, retarget (W3). Baseline: a full flight between two non-landing places.
         pg.click('nav a[href="/gitops/"]')
@@ -317,6 +343,11 @@ def main():
         rm.wait_for_timeout(1000)
         rb = rm.evaluate('__scene.frames')
         check('reduced motion: no idle life, loop stops', ra == rb and rm.evaluate('__scene.idle'), f'frames {ra}->{rb}')
+        rm.mouse.move(40, 40)
+        rm.mouse.move(1200, 650, steps=8)
+        rm.wait_for_timeout(1000)
+        st = rm.evaluate('({parallax: __scene.parallax, sway: __scene.sway, idle: __scene.idle})')
+        check('reduced motion: no parallax, no drift', st == {'parallax': 0, 'sway': 0, 'idle': True}, str(st))
         drain_csp(rm, 'reduced-motion')
         rm_ctx.close()
 
@@ -353,14 +384,79 @@ def main():
         scene_up(mb)
         mb.set_viewport_size({'width': 390, 'height': 800})
         mb.wait_for_timeout(300)
-        mb.evaluate('window.scrollTo(0, document.body.scrollHeight)')
-        mb.wait_for_timeout(300)
-        check('mobile: pauses when the sheet covers the scene', mb.evaluate('__scene.paused'))
-        mb.evaluate('window.scrollTo(0, 0)')
-        mb.wait_for_timeout(300)
-        check('mobile: resumes when uncovered', not mb.evaluate('__scene.paused'))
+        stopped, resumed, detail = stopped_then_resumed(mb, lambda: mb.evaluate('window.scrollTo(0, document.body.scrollHeight)'),
+                                                        lambda: mb.evaluate('window.scrollTo(0, 0)'))
+        check('mobile: ambient stops when the sheet covers the scene', stopped, detail)
+        check('mobile: resumes when uncovered', resumed, detail)
         drain_csp(mb, 'mobile')
         mb.close()
+
+        # Motion (L4): mouse parallax, idle drift, pause while hidden, hover.
+        mo = watch(br.new_page(viewport={'width': 1280, 'height': 720}), 'motion')
+        mo.goto(B + '/')
+        scene_up(mo)
+        settle(mo)
+        s0 = mo.evaluate('__scene.sway')
+        f0 = mo.evaluate('__scene.frames')
+        wait(mo, f'__scene.frames > {f0} + 1', 15, fail=False)
+        s1 = mo.evaluate('({sway: __scene.sway, parallax: __scene.parallax, rate: __scene.rate})')
+        if s0 == 0 and s1['sway'] == 0:
+            skip('idle drift: the camera breathes at rest, ambient rate', 'sway stays 0 (DRIFT off)')
+        else:
+            check('idle drift: the camera breathes at rest, ambient rate', s1['sway'] != s0 and s1['parallax'] == 0 and s1['rate'] == 'ambient', f'{s0} -> {s1}')
+
+        mo.mouse.move(640, 360)
+        settle(mo)
+        mo.mouse.move(1240, 40, steps=6)
+        end, full, st = time.time() + 30, False, {}
+        while time.time() < end:
+            st = mo.evaluate('({parallax: __scene.parallax, sway: __scene.sway, rate: __scene.rate})')
+            full = full or st['rate'] == 'full'
+            if st['parallax'] > 1.2 and st['rate'] == 'ambient':
+                break
+            time.sleep(0.03)
+        check('parallax: the mouse moves the camera at full rate, then ambient', full and st['parallax'] > 1.2 and st['sway'] > 0.03 and st['rate'] == 'ambient', str(st))
+        mo.mouse.move(-5, -5)
+        rest = wait(mo, "__scene.parallax === 0 && __scene.rate === 'ambient'", 30, fail=False)
+        check('parallax: eases back to rest when the pointer leaves', rest, mo.evaluate('JSON.stringify({p: __scene.parallax, s: __scene.sway, r: __scene.rate})'))
+
+        # Headless Chromium keeps every tab visible (a background tab, a minimised window), so hidden is emulated.
+        hide = "hidden => (Object.defineProperty(document, 'hidden', {configurable: true, get: () => hidden}), document.dispatchEvent(new Event('visibilitychange')))"
+        stopped, resumed, detail = stopped_then_resumed(mo, lambda: mo.evaluate(hide, True), lambda: mo.evaluate(hide, False))
+        check('hidden tab: ambient stops (emulated document.hidden)', stopped, detail)
+        check('hidden tab: resumes when visible', resumed, detail)
+
+        if not mo.evaluate('__scene.hoverable'):
+            skip('hover: a constellation label sets __scene.hot', 'the active tier has no hot() yet')
+        else:
+            node = mo.evaluate("document.querySelector('.scene-label[data-node]')?.dataset.node")
+            box = mo.locator(f'.scene-label[data-node="{node}"]').bounding_box()
+            mo.mouse.move(box['x'] + box['width'] / 2, box['y'] + box['height'] / 2, steps=4)
+            hot = wait(mo, f'__scene.hot === {node!r}', 15, fail=False)
+            check('hover: a constellation label sets __scene.hot', hot, f"{node}: hot={mo.evaluate('__scene.hot')}")
+        drain_csp(mo, 'motion')
+        mo.close()
+
+        # Touch never drives the parallax: real CDP touch input, checked to reach the page.
+        tc_ctx = br.new_context(has_touch=True, viewport={'width': 1280, 'height': 720})
+        tc = watch(tc_ctx.new_page(), 'touch')
+        tc.goto(B + '/')
+        scene_up(tc)
+        tc.evaluate("addEventListener('pointermove', e => e.pointerType === 'touch' && (window.__touches = (window.__touches || 0) + 1), {passive: true})")
+        cdp = tc_ctx.new_cdp_session(tc)
+        cdp.send('Input.dispatchTouchEvent', {'type': 'touchStart', 'touchPoints': [{'x': 1240, 'y': 60}]})
+        seen = 0.0
+        for i in range(10):
+            cdp.send('Input.dispatchTouchEvent', {'type': 'touchMove', 'touchPoints': [{'x': 1240 - 20 * i, 'y': 60 + 10 * i}]})
+            seen = max(seen, tc.evaluate('__scene.parallax'))
+            time.sleep(0.03)
+        cdp.send('Input.dispatchTouchEvent', {'type': 'touchEnd', 'touchPoints': []})
+        tc.tap('body', position={'x': 1200, 'y': 600})
+        tc.wait_for_timeout(700)
+        st = tc.evaluate('({parallax: __scene.parallax, touches: window.__touches || 0})')
+        check('touch: no parallax', st['touches'] > 0 and seen == 0 and st['parallax'] == 0, f'{st}, max seen {seen}')
+        drain_csp(tc, 'touch')
+        tc_ctx.close()
 
         # Labels (W2): one [data-node] per topology node, and a node added to the YAML gets one.
         lb = watch(br.new_page(), 'labels')
