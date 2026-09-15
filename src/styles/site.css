@@ -146,3 +146,17 @@ article > section h2 { font-size: var(--step-0); }
 .swatches { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(8rem, 1fr)); gap: var(--space-3); }
 .swatches li::before { content: ''; display: block; height: 3rem; margin-bottom: var(--space-1); background: var(--swatch); border: 1px solid var(--rule); }
 .swatches code { font-family: var(--mono); font-size: var(--step--1); color: var(--muted); }
+
+/* M2 scene: the canvas fills .scene under the recede gradient; labels sit above it. */
+.scene canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.scene-labels { position: fixed; inset: 0; z-index: -1; pointer-events: none; }
+
+/* Reduced motion: Astro's viewtransitions.css turns every transition off, which would cut. Bring
+   back a root crossfade, prose and scene together; (root) outranks Astro's (*). Browsers without
+   view transitions (Safari 17) still cut. */
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(root) { animation: 250ms ease-out both rm-fade-out !important; }
+  ::view-transition-new(root) { animation: 250ms ease-in both rm-fade-in !important; }
+}
+@keyframes rm-fade-out { to { opacity: 0 } }
+@keyframes rm-fade-in { from { opacity: 0 } }
