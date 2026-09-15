@@ -12,7 +12,17 @@ export interface Waypoint { id: PlaceId; pos: Vec3; focus?: string[] }
 export interface Topology { nodes: TopologyNode[]; links: { from: string; to: string }[]; waypoints: Waypoint[] }
 
 /** Chosen once at startup (quality.ts). Tiers read counts from here, never hardcode them. */
-export interface Quality { dpr: number; stars: number; bloom: boolean; reducedMotion: boolean }
+export interface Quality {
+  dpr: number;
+  stars: number; // galaxy-model stars in the Galaxy tier
+  regionStars: number; // galaxy-model stars in the Region tier; same seed, so a superset of the Galaxy tier's
+  deepField: number; // background galaxies, shared by both tiers
+  foreground: number; // foreground stars with diffraction spikes, shared by both tiers
+  brightStars: number; // Region: the most luminous young stars, drawn with spikes when near enough
+  dustScale: number; // the disc dust pass renders at this fraction of CSS pixels
+  bloom: boolean;
+  reducedMotion: boolean;
+}
 
 /** Camera placement in the active tier's own units. Tiers set their own near/far in render(). */
 export interface CameraPose { position: Vec3; target: Vec3; fov: number }
@@ -34,7 +44,12 @@ export interface Tier {
   id: TierId;
   load(ctx: SceneContext): Promise<void>; // called once, on first use
   frame(place: PlaceId): CameraPose; // where the camera sits to show this place
-  update(dt: number): boolean; // true = still animating, keep rendering
+  // Called every rendered frame, ambient ones included. true = animating at full rate (a hover
+  // easing, say). Idle life (twinkle, drift) advances by dt and returns false: the loop keeps it at <=30 fps.
+  update(dt: number): boolean;
+  /** Mouse pointer in CSS pixels, NaN when it leaves. Not called for touch. Return nothing; call ctx.invalidate() to animate. */
+  hover?(x: number, y: number): void;
+  hot?(): string | null; // id of the topology node under the pointer, or null (read into __scene.hot)
   render(renderer: THREE.WebGLRenderer, camera: THREE.Camera): void;
   resize?(width: number, height: number): void; // CSS pixels; renderer is already resized
   show?(visible: boolean): void; // e.g. hide DOM labels when the tier is cut away
@@ -76,5 +91,7 @@ export interface SceneDebug {
   flights: string[]; // every non-instant goTo, in order
   flying: boolean; // the director reported a flight in progress on the last frame
   idle: boolean; // no frame is scheduled
+  rate: 'full' | 'ambient' | 'idle'; // ambient: only the ≤30 fps idle animation is running
+  hot: string | null; // the constellation star under the pointer, or null
   paused: boolean;
 }

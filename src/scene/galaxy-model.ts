@@ -20,7 +20,7 @@ const CORE = 1; // waypoints closer than this to the axis are the core, not an a
 const TAU = Math.PI * 2;
 
 /** mulberry32: small, fast, good enough for star fields. */
-function prng(seed: number) {
+export function prng(seed: number) {
   let a = seed >>> 0;
   return () => {
     a = (a + 0x6d2b79f5) >>> 0;

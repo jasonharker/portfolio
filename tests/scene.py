@@ -129,7 +129,7 @@ def fly(page, click, path, start_timeout=1.0, max_flight=10.0):
 
 
 def settle(page):
-    wait(page, '!__scene.flying && __scene.idle', 10)
+    wait(page, "!__scene.flying && __scene.rate !== 'full'", 10)
 
 
 # --- dist scan (spec §4 disclosure) -----------------------------------------------------
@@ -239,7 +239,7 @@ def main():
         fa = pg.evaluate('__scene.frames')
         pg.wait_for_timeout(1000)
         fb = pg.evaluate('__scene.frames')
-        check('loop idles when nothing moves', fa == fb and pg.evaluate('__scene.idle'), f'frames {fa}->{fb}')
+        check('idle life: ambient, at most 30 fps', 0 < fb - fa <= 33 and pg.evaluate("__scene.rate === 'ambient'"), f'frames {fa}->{fb}')
 
         # Flights, skip, retarget (W3). Baseline: a full flight between two non-landing places.
         pg.click('nav a[href="/gitops/"]')
@@ -252,7 +252,7 @@ def main():
                 skip(name, 'director never flies (W3 not merged)')
         else:
             settle(pg)
-            check('flight: gitops -> incidents flies, then idles', pg.evaluate("__scene.place === 'incidents' && __scene.idle"), f'{baseline:.2f}s')
+            check('flight: gitops -> incidents flies, then idles', pg.evaluate("__scene.place === 'incidents' && __scene.rate !== 'full'"), f'{baseline:.2f}s')
 
             for how, act in (('Esc', lambda: pg.keyboard.press('Escape')),
                              ('second click on the active link', lambda: pg.click('.masthead nav a[aria-current="page"]'))):
@@ -312,6 +312,11 @@ def main():
             skip('reduced motion: never flies', 'director never flies in normal mode either, so this cannot discriminate (W3 not merged)')
         else:
             check('reduced motion: never flies', rm_ok)
+        rm.wait_for_timeout(500)
+        ra = rm.evaluate('__scene.frames')
+        rm.wait_for_timeout(1000)
+        rb = rm.evaluate('__scene.frames')
+        check('reduced motion: no idle life, loop stops', ra == rb and rm.evaluate('__scene.idle'), f'frames {ra}->{rb}')
         drain_csp(rm, 'reduced-motion')
         rm_ctx.close()
 

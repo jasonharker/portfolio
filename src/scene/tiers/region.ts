@@ -6,7 +6,9 @@
 // Units are galaxy units (≈ kpc), so waypoint positions from topology.yaml are used directly.
 import * as THREE from 'three';
 import { createConstellation, type Constellation } from '../constellation';
+import { createDust, type Dust } from '../dust';
 import { galaxyModel, SEED } from '../galaxy-model';
+import { createSky, type Sky } from '../jwst';
 import { createLabels, type Labels } from '../labels';
 import type { CameraPose, PlaceId, SceneContext, Tier, Waypoint } from '../types';
 
@@ -94,6 +96,8 @@ let constellation: Constellation;
 let labels: Labels;
 let ground: THREE.Color;
 let glow: THREE.Mesh;
+let dust: Dust;
+let sky: Sky;
 let observer: ResizeObserver;
 let visible = false;
 let width = innerWidth;
@@ -213,7 +217,14 @@ export const region: Tier = {
     markers.frustumCulled = false;
     markers.renderOrder = 4;
 
-    scene.add(backdrop, glow, constellation.group, markers);
+    // The same kpc dust field as the Galaxy tier, seen close (look 1: absorbing lanes, HII), and the same sky.
+    dust = track(createDust(model, 1, 1, ctx.quality.dustScale, 7));
+    dust.resize(width, height);
+    dust.composite.renderOrder = 0.5;
+    sky = track(createSky(ctx.quality.deepField, ctx.quality.foreground, dpr, ctx.colour));
+    sky.gain(0.9, 1);
+
+    scene.add(sky.group, backdrop, dust.composite, glow, constellation.group, markers);
 
     // The label layer's box is the canvas's box (both fixed, inset 0), which excludes a scrollbar
     // that innerWidth includes; watch it directly.
@@ -244,7 +255,10 @@ export const region: Tier = {
     };
   },
 
-  update: () => false,
+  update(dt) {
+    sky.update(dt);
+    return false;
+  },
 
   render(renderer, camera) {
     const cam = camera as THREE.PerspectiveCamera;
@@ -260,6 +274,7 @@ export const region: Tier = {
     renderer.setClearColor(ground, 1);
     const far = cam.position.distanceTo(constellation.centre);
     constellation.fade(far);
+    dust.render(renderer, cam);
     renderer.render(scene, cam);
     labels.update(cam, width, height, visible && far < LABEL_RANGE);
   },
@@ -267,6 +282,7 @@ export const region: Tier = {
   resize(w, h) {
     width = ctx.labels.clientWidth || w;
     height = ctx.labels.clientHeight || h;
+    dust?.resize(w, h);
   },
 
   show(on) {

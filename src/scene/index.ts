@@ -58,6 +58,8 @@ export function start(canvas: HTMLCanvasElement, gl: WebGL2RenderingContext, lab
     path: location.pathname, place: placeFor(location.pathname),
     instantAt: location.pathname, flights: [],
     get idle() { return loop.idle; },
+    get rate() { return loop.rate; },
+    get hot() { return active?.hot?.() ?? null; },
     get paused() { return loop.paused; },
   };
   canvas.dataset.born = debug.born;
@@ -69,7 +71,7 @@ export function start(canvas: HTMLCanvasElement, gl: WebGL2RenderingContext, lab
     active?.render(renderer, camera);
     debug.frames++;
     return flying || moving;
-  });
+  }, !quality.reducedMotion);
 
   const resize = () => {
     renderer.setSize(innerWidth, innerHeight, false);
@@ -87,6 +89,11 @@ export function start(canvas: HTMLCanvasElement, gl: WebGL2RenderingContext, lab
   document.addEventListener('visibilitychange', () => loop.pause('hidden', document.hidden));
   addEventListener('scroll', covered, { passive: true });
   document.addEventListener('astro:page-load', covered);
+
+  // Mouse only: touch has no hover, and a drag is a scroll.
+  const hover = (e: PointerEvent) => e.pointerType === 'mouse' && active?.hover?.(e.clientX, e.clientY);
+  addEventListener('pointermove', hover, { passive: true });
+  document.documentElement.addEventListener('pointerleave', () => active?.hover?.(NaN, NaN));
 
   canvas.addEventListener('webglcontextlost', () => debug.contextLost++);
   canvas.addEventListener('webglcontextrestored', () => loop.invalidate());

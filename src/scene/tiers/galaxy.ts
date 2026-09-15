@@ -1,7 +1,12 @@
 // Galaxy tier (spec §3): the whole disc, tilted, bulge brightest, the places as marked points. Nothing to read.
-// Draw calls: disc haze, bulge glow, stars (one Points), place markers (one Points), plus bloom's passes.
+// The look is JWST's Phantom Galaxy (M74): orange-red dust filaments tracing the arms, a blue-white core,
+// many-coloured stars, a deep field behind, spikes on the foreground stars (dust.ts, jwst.ts).
+// Draw calls: dust into its target (1), then deep field, stars, dust composite, bulge glow, foreground
+// stars (5), bloom's passes, place markers (1).
 import * as THREE from 'three';
+import { createDust, type Dust } from '../dust';
 import { DISC_RADIUS, galaxyModel, SEED } from '../galaxy-model';
+import { additive, createSky, vivid, type Sky } from '../jwst';
 import { createBloom, type Bloom } from '../post/bloom';
 import type { CameraPose, PlaceId, SceneContext, Tier, Waypoint } from '../types';
 
@@ -11,9 +16,6 @@ const PAN = 0.3; // how far toward a place the frame's centre moves, so pans bet
 const OFFSET = 0.28; // on wide screens, where the frame's centre sits in ndc x
 const NEAR = 0.5;
 const FAR = 300;
-const SAMPLES = 48; // arm-angle samples for the haze shader, log-spaced in r; one vec4 per sample, one arm per component
-const R_MIN = 0.5;
-const R_MAX = DISC_RADIUS + 1;
 /** Token kelvins in tokens.css; the values themselves are read from CSS. */
 const KELVINS = [3000, 4300, 5600, 6800, 8500, 12000, 30000];
 
@@ -47,41 +49,6 @@ const starsFragment = /* glsl */ `
   }
 `;
 
-const hazeVertex = /* glsl */ `
-  varying vec2 vXZ;
-  void main() {
-    vXZ = position.xz;
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-  }
-`;
-const hazeFragment = /* glsl */ `
-  #define PI 3.141592653589793
-  uniform vec4 uAngles[SAMPLES]; // 48 uniform slots, well inside WebGL2's minimum of 224
-  uniform vec3 uArm;
-  uniform vec3 uDisc;
-  varying vec2 vXZ;
-  float armAngle(int arm, float r) {
-    float f = clamp((log(max(r, R_MIN)) - log(R_MIN)) / (log(R_MAX) - log(R_MIN)), 0.0, 1.0) * float(SAMPLES - 1);
-    int i = int(f);
-    int j = min(i + 1, SAMPLES - 1);
-    return mix(uAngles[i][arm], uAngles[j][arm], fract(f));
-  }
-  void main() {
-    float r = length(vXZ);
-    float theta = atan(vXZ.y, vXZ.x);
-    float arms = 0.0;
-    for (int k = 0; k < ARMS; k++) {
-      float d = mod(theta - armAngle(k, r) + PI, 2.0 * PI) - PI;
-      float x = d * r / (0.7 + 0.09 * r);
-      arms += exp(-0.5 * x * x);
-    }
-    float disc = exp(-r / 4.5) * smoothstep(R_MAX, R_MAX - 4.0, r);
-    vec3 c = (uDisc * 0.25 + uArm * arms * smoothstep(0.8, 3.0, r)) * disc;
-    gl_FragColor = vec4(c, 1.0);
-    ${outputChunks}
-  }
-`;
-
 const glowVertex = /* glsl */ `
   uniform float uSize;
   varying vec2 vUv;
@@ -97,9 +64,10 @@ const glowFragment = /* glsl */ `
   varying vec2 vUv;
   void main() {
     float d = length(vUv) * 8.0; // kpc-ish, the quad spans ±8
-    float i = 1.3 * exp(-d * d / 0.4) + 0.45 * exp(-d * d / 3.0);
+    float i = 1.5 * exp(-d * d / 0.06) + 0.35 * exp(-d * d / 0.8) + 0.1 * exp(-d / 1.6);
     i *= smoothstep(8.0, 5.0, d);
-    gl_FragColor = vec4(uColor * i, 1.0);
+    // Blue-white: white where it saturates, the tint in the wings.
+    gl_FragColor = vec4(mix(uColor, vec3(1.0), clamp(i - 0.6, 0.0, 1.0)) * i, 1.0);
     ${outputChunks}
   }
 `;
@@ -132,15 +100,17 @@ let ctx: SceneContext;
 let scene: THREE.Scene;
 let markers: THREE.Scene;
 let bloom: Bloom | null = null;
+let dust: Dust;
+let sky: Sky;
 let aspect = 16 / 9;
 const disposables: { dispose(): void }[] = [];
 const starUniforms = { uScale: { value: 1 }, uGain: { value: 1 } };
 const markerUniforms = { uSize: { value: 18 }, uPx: { value: 18 }, uColor: { value: new THREE.Color() }, uGround: { value: new THREE.Color() } };
 const buffer = new THREE.Vector2();
 
-/** Colour for a temperature: log-interpolated between the blackbody tokens. */
+/** Colour for a temperature: log-interpolated between the blackbody tokens, chroma pushed (jwst.ts). */
 function palette(c: SceneContext) {
-  const stops = KELVINS.map((k) => ({ lk: Math.log(k), c: c.colour(`--star-${k}`) }));
+  const stops = KELVINS.map((k) => ({ lk: Math.log(k), c: vivid(c.colour(`--star-${k}`), 2.4) }));
   return (t: number, out: THREE.Color) => {
     const lt = Math.log(t);
     let i = 0;
@@ -198,13 +168,8 @@ export const galaxy: Tier = {
     // As scene.background, not setClearColor: the clear is then encoded for whichever target is bound.
     scene.background = c.colour('--ground');
     markers = new THREE.Scene();
-    // Screen blending, src + dst·(1 − src): light accumulates like additive but tops out at white, so the
-    // dense bulge can't run away into HDR values that bloom would smear over the whole sky.
-    const additive = {
-      blending: THREE.CustomBlending, blendSrc: THREE.OneFactor, blendDst: THREE.OneMinusSrcColorFactor,
-      blendSrcAlpha: THREE.ZeroFactor, blendDstAlpha: THREE.OneFactor,
-      depthTest: false, depthWrite: false, transparent: true,
-    };
+    // Blending is jwst.ts's screen blend, src + dst·(1 − src): light accumulates like additive but tops out
+    // at white, so the dense bulge can't run away into HDR values that bloom would smear over the whole sky.
 
     // Stars.
     const model = galaxyModel(SEED, c.quality.stars, c.topology.waypoints);
@@ -217,10 +182,10 @@ export const galaxy: Tier = {
       colourOf(t, col);
       // Hot stars are the luminous ones; a stable per-star hash varies the rest.
       const h = (Math.imul(i + 1, 2654435761) >>> 0) / 4294967296;
-      const lum = t > 8000 ? 1.6 + h : 0.6 + 0.7 * h;
+      const lum = t > 8000 ? 0.55 + 0.8 * h : 0.3 + 0.45 * h;
       // The bulge's light comes from its glow; its stars alone would saturate.
       const x = model.positions[i * 3], y = model.positions[i * 3 + 1], z = model.positions[i * 3 + 2];
-      const dim = THREE.MathUtils.smoothstep(Math.hypot(x, y, z), 0.5, 3) * 0.5 + 0.5;
+      const dim = THREE.MathUtils.smoothstep(Math.hypot(x, y, z), 0.5, 6) * 0.6 + 0.15;
       col.multiplyScalar(dim);
       tint.set([col.r, col.g, col.b, 0.05 * lum], i * 4);
     }
@@ -230,36 +195,24 @@ export const galaxy: Tier = {
     const starsMat = own(new THREE.ShaderMaterial({ vertexShader: starsVertex, fragmentShader: starsFragment, uniforms: starUniforms, ...additive }));
     const points = new THREE.Points(stars, starsMat);
     points.frustumCulled = false;
+    points.renderOrder = 0;
 
-    // Unresolved starlight along the arms, from the same model.
-    if (model.arms > 4) throw new Error('galaxy: the haze shader packs at most four arms');
-    const angles = new Float32Array(4 * SAMPLES);
-    for (let s = 0; s < SAMPLES; s++) {
-      const r = R_MIN * Math.pow(R_MAX / R_MIN, s / (SAMPLES - 1));
-      for (let arm = 0; arm < model.arms; arm++) angles[s * 4 + arm] = model.armAngleAt(r, arm);
-    }
-    const hazeGeo = own(new THREE.PlaneGeometry(R_MAX * 2, R_MAX * 2).rotateX(-Math.PI / 2));
-    const hazeMat = own(new THREE.ShaderMaterial({
-      vertexShader: hazeVertex, fragmentShader: hazeFragment, ...additive,
-      defines: { ARMS: model.arms, SAMPLES, R_MIN: R_MIN.toFixed(3), R_MAX: R_MAX.toFixed(3) },
-      uniforms: {
-        uAngles: { value: angles },
-        uArm: { value: c.colour('--star-8500').multiplyScalar(0.12) },
-        uDisc: { value: c.colour('--star-5600').multiplyScalar(0.12) },
-      },
-    }));
-    const haze = new THREE.Mesh(hazeGeo, hazeMat);
-
+    // Unresolved starlight, dust and HII along the arms, from the same model.
+    dust = own(createDust(model, 0, 1.15, c.quality.dustScale, 5));
+    dust.composite.renderOrder = 1;
+    sky = own(createSky(c.quality.deepField, c.quality.foreground, c.quality.dpr, c.colour));
+    sky.gain(0.9, 1);
     // Bulge glow: a camera-facing quad, the brightest thing in the frame.
     const glowGeo = own(new THREE.PlaneGeometry(1, 1));
     const glowMat = own(new THREE.ShaderMaterial({
       vertexShader: glowVertex, fragmentShader: glowFragment, ...additive,
-      uniforms: { uSize: { value: 16 }, uColor: { value: c.colour('--star-4300').lerp(c.colour('--star-5600'), 0.5) } },
+      uniforms: { uSize: { value: 16 }, uColor: { value: vivid(c.colour('--star-12000'), 1.6).multiplyScalar(0.8) } },
     }));
     const glow = new THREE.Mesh(glowGeo, glowMat);
     glow.frustumCulled = false;
+    glow.renderOrder = 2;
 
-    scene.add(haze, glow, points);
+    scene.add(sky.group, points, dust.composite, glow);
 
     // Places, drawn after bloom so they stay crisp.
     const markerGeo = own(new THREE.BufferGeometry());
@@ -274,7 +227,7 @@ export const galaxy: Tier = {
     marks.frustumCulled = false;
     markers.add(marks);
 
-    if (c.quality.bloom) bloom = createBloom(c.renderer, { strength: 0.6, radius: 0.2, threshold: 0.55 });
+    if (c.quality.bloom) bloom = createBloom(c.renderer, { strength: 0.55, radius: 0.35, threshold: 0.6 });
   },
 
   frame(id) {
@@ -288,7 +241,10 @@ export const galaxy: Tier = {
     return pose;
   },
 
-  update: () => false,
+  update(dt) {
+    sky.update(dt);
+    return false;
+  },
 
   render(renderer, camera) {
     const cam = camera as THREE.PerspectiveCamera;
@@ -302,6 +258,7 @@ export const galaxy: Tier = {
     const px = 18 * renderer.getPixelRatio();
     markerUniforms.uSize.value = markerUniforms.uPx.value = px;
 
+    dust.render(renderer, camera);
     if (bloom) bloom.render(scene, camera);
     else renderer.render(scene, camera);
 
@@ -313,6 +270,7 @@ export const galaxy: Tier = {
 
   resize(width, height) {
     aspect = width / height;
+    dust?.resize(width, height);
     bloom?.resize(width, height);
   },
 
