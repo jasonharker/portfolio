@@ -3,6 +3,9 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --no-audit --no-fund
 COPY . .
+# Last commit date of src/data/topology.yaml, from Jenkins: .dockerignore keeps .git out of
+# the context. Unset in dev; the site falls back to "unknown".
+ARG TOPOLOGY_DATE
 RUN npm run build
 
 FROM nginxinc/nginx-unprivileged:1.31.5-alpine
