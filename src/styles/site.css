@@ -30,14 +30,17 @@ p { margin: 0; }
     radial-gradient(ellipse 28rem 16rem at 72% 45%, color-mix(in srgb, var(--star-5600) 22%, transparent), transparent 70%),
     var(--ground);
 }
-/* Recede: dark under the column, clear toward the object. */
+/* Recede: dark under the column, clear toward the object. Tracks the column's own width rather
+   than a second hardcoded figure, so the two can't drift apart. Only drawn while reading. */
 .scene::after {
   content: '';
   position: absolute;
   inset: 0;
-  background: linear-gradient(to right, var(--ground) 0, var(--ground) 30rem, transparent 60%);
-  transition: opacity 0.3s;
+  opacity: 0;
+  background: linear-gradient(to right, var(--ground) 0, var(--ground) var(--reading), transparent calc(var(--reading) + 14rem));
+  transition: opacity 0.35s;
 }
+[data-read] .scene::after { opacity: 1; }
 
 .masthead {
   display: flex;
@@ -86,7 +89,20 @@ article > .prose, article > section { margin-top: var(--space-5); }
 article > section h2 { font-size: var(--step-0); }
 .list p { color: var(--muted); margin-top: var(--space-1); }
 
-/* Constellation as plain HTML: hosts grouped by layer, each marked with its star colour. */
+/* Off-screen but in the accessibility tree and in the print flow: the text equivalent of the
+   constellation's aria-hidden star labels. */
+.visually-hidden:not(:focus-within) {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Hosts grouped by layer, each marked with its star colour. Shared with an incident's focus list. */
 .layers { display: grid; gap: var(--space-5); }
 .layers h2 { font-size: var(--step-1); }
 .hosts { list-style: none; padding: 0; margin: var(--space-2) 0 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr)); gap: var(--space-2) var(--space-4); }
@@ -108,9 +124,42 @@ article > section h2 { font-size: var(--step-0); }
 .cv .when { color: var(--muted); }
 .cv ul { margin: var(--space-2) 0 0; padding-left: 1.1rem; }
 
-/* Look around: the column steps aside for the full scene. */
-[data-look] .column { visibility: hidden; }
-[data-look] .scene::after { opacity: 0; }
+/* Wide screens: the masthead becomes a rail down the left and the column slides over it. Narrow
+   screens keep the bottom sheet below, which the render loop's covered() measures — don't move it. */
+@media (min-width: 48.0625rem) {
+  .masthead {
+    position: fixed;
+    inset: 0 auto 0 0;
+    width: var(--rail);
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-4);
+    padding: var(--space-4) var(--space-3);
+    z-index: 1;
+  }
+  .masthead nav { flex-direction: column; gap: var(--space-2); }
+  .look { margin: auto 0 0; }
+
+  .column {
+    position: fixed;
+    inset: 0 auto 0 0;
+    width: min(100%, var(--reading));
+    max-width: none;
+    margin: 0;
+    padding: var(--space-5) var(--space-4) var(--space-6) calc(var(--rail) + var(--space-3));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    transform: translateX(-100%);
+    transition: transform 0.35s;
+  }
+  /* Tabbing into the prose brings it in: the column is off-canvas, never unreachable. */
+  [data-read] .column, .column:focus-within { transform: none; }
+  .resume .column { width: min(100%, calc(var(--rail) + 64rem)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .column { transition: none; }
+}
 
 /* Mobile: the column becomes a bottom sheet opening at ~40% height; scrolling drags it up
    over the frozen scene. */
@@ -138,6 +187,8 @@ article > section h2 { font-size: var(--step-0); }
   body { background: #fff; }
   .scene, .masthead nav, .look { display: none; }
   .masthead, .column, .resume .column { padding: 0; margin: 0; max-width: none; }
+  /* The rail and the sliding column are screen furniture: on paper it is one flow again. */
+  .masthead, .column, .resume .column { position: static; transform: none; width: auto; overflow: visible; }
   .column { margin-top: 1rem; min-height: 0; border: 0; background: none; }
   .cv { grid-template-columns: 9rem 1fr; }
 }

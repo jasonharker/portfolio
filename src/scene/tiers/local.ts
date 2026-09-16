@@ -118,6 +118,10 @@ export const local: Tier = {
 
     scene.add(sky.group, core);
     for (const p of Object.values(places)) scene.add(p.group);
+    // Compile every place's materials now, while all three groups are still visible. Otherwise the
+    // first frame that shows a place compiles its shaders mid-flight, which stalls the cut — a
+    // visible hitch on an Intel UHD 620, and seconds under SwiftShader in the tests.
+    c.renderer.compile(scene, c.camera);
     this.show?.(false);
   },
 

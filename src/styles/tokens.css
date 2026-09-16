@@ -55,6 +55,10 @@
   --space-6: 4rem;
 
   --measure: 38rem;
+  /* The rail is the resting state: menu and wordmark only, the scene has the rest of the frame.
+     --reading is how far the column reaches when opened, and the recede gradient follows it. */
+  --rail: 11rem;
+  --reading: calc(var(--rail) + var(--measure) + 2 * var(--space-3));
 }
 
 @media (prefers-contrast: more) {

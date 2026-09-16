@@ -3,10 +3,12 @@
 // only as transforms (no layout). A label is hidden when its star is behind the camera or
 // off-screen.
 //
-// Screen readers: every label is aria-hidden. The landing page already lists every host,
-// grouped by layer, in its HTML, and this layer persists across every page, so exposing it
-// would read the whole lab again on /incidents, /gitops and the rest. Labels take no pointer
-// events; hit() tests their boxes so the tier can light the hovered star.
+// Screen readers: every label is aria-hidden. The landing page lists every host, grouped by layer,
+// in a .visually-hidden nav (src/pages/index.astro) — that list is the text equivalent of these
+// labels, and it is why hiding them costs nothing. It is deliberately on the landing page only:
+// this layer persists across every page, so exposing the labels themselves would read the whole
+// lab again on /incidents, /gitops and the rest. Labels take no pointer events; hit() tests their
+// boxes so the tier can light the hovered star.
 import * as THREE from 'three';
 import type { TopologyNode } from './types';
 
@@ -37,17 +39,21 @@ export function createLabels(root: HTMLElement, nodes: TopologyNode[], star: (id
     role.textContent = node.role;
     el.append(host, role);
     layer.append(el);
-    return { id: node.id, el, x: NaN, y: NaN, on: true };
+    // `on` = in frame, and so a candidate for the hit test. `shown` = actually drawn, which since
+    // M3 means hovered. The two are separate: a star you can hover is not a label you can see.
+    return { id: node.id, el, x: NaN, y: NaN, on: true, shown: true };
   });
   root.append(layer);
 
   let shown = true;
   let hot: (typeof items)[number] | undefined;
   const v = new THREE.Vector3();
-  const setOn = (item: (typeof items)[number], on: boolean) => {
-    if (item.on === on) return;
-    item.on = on;
-    item.el.style.visibility = on ? '' : 'hidden';
+  const setOn = (item: (typeof items)[number], framed: boolean) => {
+    item.on = framed;
+    const show = framed && item === hot;
+    if (item.shown === show) return;
+    item.shown = show;
+    item.el.style.visibility = show ? '' : 'hidden';
   };
 
   return {
@@ -55,9 +61,11 @@ export function createLabels(root: HTMLElement, nodes: TopologyNode[], star: (id
       for (const item of items) {
         star(item.id, v).project(camera);
         // project() puts points behind the camera at z > 1; allow a margin past the edges.
-        const on = visible && v.z < 1 && Math.abs(v.x) < 1.05 && Math.abs(v.y) < 1.05;
-        setOn(item, on);
-        if (!on) continue;
+        const framed = visible && v.z < 1 && Math.abs(v.x) < 1.05 && Math.abs(v.y) < 1.05;
+        // Hover only (spec §6): thirty-odd names at once sat on the best part of the image. The
+        // text equivalent for anyone not using a mouse is the host list on the landing page.
+        setOn(item, framed);
+        if (!framed) continue;
         const x = Math.round((v.x + 1) * 0.5 * width);
         const y = Math.round((1 - v.y) * 0.5 * height);
         if (x === item.x && y === item.y) continue;
@@ -80,8 +88,9 @@ export function createLabels(root: HTMLElement, nodes: TopologyNode[], star: (id
       }
       if (best) return best;
       // Labels are pointer-events: none, so the box is tested here rather than by the browser.
+      // Only the visible one: an invisible label's box would hover a name out of empty space.
       for (const item of items) {
-        if (!item.on) continue;
+        if (!item.shown) continue;
         const r = item.el.getBoundingClientRect();
         if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) return item.id;
       }

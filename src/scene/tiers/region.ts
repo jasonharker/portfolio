@@ -157,6 +157,10 @@ const starUniforms = { uScale: { value: 1 } };
 const glowUniforms = { uSize: { value: 16 }, uColor: { value: new THREE.Color() }, uStrength: { value: 1 } };
 const markerUniforms = { uSize: { value: 30 }, uColor: { value: new THREE.Color() }, uGround: { value: new THREE.Color() } };
 const buffer = new THREE.Vector2();
+let plane: THREE.Plane;
+const ray = new THREE.Raycaster();
+const ndc = new THREE.Vector2();
+const hit3 = new THREE.Vector3();
 
 function waypoint(place: PlaceId): Waypoint {
   return ctx.topology.waypoints.find((w) => w.id === place)!;
@@ -272,6 +276,9 @@ export const region: Tier = {
     // The constellation faces the camera that frames it.
     const b = base('constellation');
     constellation = createConstellation(ctx, b.target, CONSTELLATION_SCALE, new THREE.Matrix4().makeBasis(b.right, b.up, b.back), DISTANCE * 1.3);
+    // The plane the stars lie in. The pointer is projected onto it so the repulsion happens in the
+    // constellation's own space rather than in screen space (spec §3).
+    plane = new THREE.Plane().setFromNormalAndCoplanarPoint(b.back.clone().normalize(), b.target);
     constellation.resize(dpr);
     track(constellation);
     labels = createLabels(ctx.labels, ctx.topology.nodes, constellation.world);
@@ -320,7 +327,9 @@ export const region: Tier = {
     position.addScaledVector(back, distance - framed);
     const half = distance * tan;
     const pan = aspect >= 1
-      ? right.multiplyScalar(-0.33 * half * aspect).addScaledVector(up, 0.08 * half)
+      // Right of centre, but only enough to clear the rail: the reading column is opened on demand
+      // over the scene now, not parked beside it (spec §6).
+      ? right.multiplyScalar(-0.14 * half * aspect).addScaledVector(up, 0.08 * half)
       : up.multiplyScalar(-0.4 * half);
     return {
       position: position.add(pan).toArray() as CameraPose['position'],
@@ -338,6 +347,13 @@ export const region: Tier = {
 
   hover(x, y) {
     pointer = { x, y };
+    // Where the pointer meets the constellation's plane, for the stars to give way from.
+    if (Number.isNaN(x)) constellation.probe(null);
+    else {
+      const w = ctx.labels.clientWidth || innerWidth, h = ctx.labels.clientHeight || innerHeight;
+      ray.setFromCamera(ndc.set((2 * x) / w - 1, 1 - (2 * y) / h), ctx.camera);
+      constellation.probe(ray.ray.intersectPlane(plane, hit3) ? hit3 : null);
+    }
     const next = Number.isNaN(x) || !labelsOn ? null : labels.hit(x, y, HOVER_PX);
     if (next === hot) return;
     hot = next;

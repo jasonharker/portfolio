@@ -13,7 +13,10 @@ import type { CameraPose, PlaceId, SceneContext, Tier, Waypoint } from '../types
 const ELEVATION = (35 * Math.PI) / 180; // camera height above the disc plane
 const FOV = 50;
 const PAN = 0.3; // how far toward a place the frame's centre moves, so pans between places read
-const OFFSET = 0.28; // on wide screens, where the frame's centre sits in ndc x
+// On wide screens the frame's centre sits a little right of centre in ndc x. It used to clear a
+// permanently open reading column; since M3 the column is opened on demand over a rail (spec §6),
+// so this only has to keep the composition off the rail, not off 38rem of prose.
+const OFFSET = 0.1;
 const NEAR = 0.5;
 const FAR = 300;
 const outputChunks = /* glsl */ `

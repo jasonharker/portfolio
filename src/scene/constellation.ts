@@ -92,6 +92,18 @@ export function layout(topology: Topology): Map<string, THREE.Vector3> {
 }
 
 const HOVER_S = 0.15; // hover glow eases in and out over this
+// Stars give way (spec §3). The pointer is projected onto the constellation's own plane and
+// repels stars there, in constellation-local units — not a screen-space shove, so the effect is
+// the same size relative to the lab however the page is framed.
+const PUSH_R = 0.22; // radius of the dent, local units
+const PUSH_F = 0.55; // how hard the centre pushes
+const SPRING = 34; // pull back to rest, rad/s
+const DAMP = 0.86; // velocity kept per frame; under 1 so it settles rather than rings
+const REST_EPS = 1e-4; // below this the star is home and stops asking for frames
+// Breath: the whole constellation inhales, slowly. Idle life that survives on touch and with the
+// pointer off-window, which the repulsion above cannot. Ambient frames only.
+const BREATH = 0.015; // fraction of scale
+const BREATH_S = 11; // seconds per breath
 const SIZE = 110; // sprite CSS px at the framing distance; the core is a fraction, the rest is spikes
 
 const vertex = /* glsl */ `
@@ -151,6 +163,8 @@ export interface Constellation {
   fade(cameraDistance: number): void;
   /** Advance the twinkle and ease the hover glow toward `hot`. true while easing. */
   update(dt: number, hot: string | null): boolean;
+  /** Where the pointer meets the constellation's plane, in world space, or null when it leaves. */
+  probe(point: THREE.Vector3 | null): void;
   dispose(): void;
 }
 
@@ -229,8 +243,33 @@ export function createConstellation(ctx: SceneContext, centre: THREE.Vector3, sc
   const group = new THREE.Group();
   group.add(lines, stars);
   group.matrixAutoUpdate = false;
-  group.matrix.copy(basis).scale(new THREE.Vector3(scale, scale, scale)).setPosition(centre);
-  group.matrixWorldNeedsUpdate = true;
+  const compose = (breath: number) => {
+    group.matrix.copy(basis).scale(new THREE.Vector3(scale, scale, scale).multiplyScalar(breath)).setPosition(centre);
+    group.matrixWorldNeedsUpdate = true;
+  };
+  compose(1);
+
+  // Rest positions; `positions` is what gets drawn, so labels and world() follow a pushed star.
+  const rest = positions.slice();
+  const velocity = new Float32Array(n * 3);
+  const starAttribute = starGeometry.getAttribute('position') as THREE.BufferAttribute;
+  const toLocal = new THREE.Matrix4();
+  const at = new THREE.Vector3();
+  let probed: THREE.Vector3 | null = null;
+  let settled = true; // every star is at rest and nothing needs a frame
+  let breath = 0; // seconds, only advanced on rendered frames
+
+  /** Move the links to wherever their stars actually are. */
+  const restring = () => {
+    topology.links.forEach((l, i) => {
+      const a = index.get(l.from)! * 3, b = index.get(l.to)! * 3;
+      for (let v = 0; v < 3; v++) {
+        segments[i * 6 + v] = positions[a + v];
+        segments[i * 6 + 3 + v] = positions[b + v];
+      }
+    });
+    lineGeometry.getAttribute('position').needsUpdate = true;
+  };
 
   return {
     group,
@@ -245,9 +284,18 @@ export function createConstellation(ctx: SceneContext, centre: THREE.Vector3, sc
     fade(cameraDistance) {
       lineMaterial.opacity = THREE.MathUtils.clamp(viewDistance / cameraDistance, 0.15, 1);
     },
+    probe(point) {
+      probed = point;
+      if (point) settled = false; // a moving pointer needs frames even when every star is home
+    },
     update(dt, hot) {
       // Under reduced motion there are no ambient frames; the twinkle holds still rather than jump.
-      if (!ctx.quality.reducedMotion) uniforms.uTime.value += dt;
+      if (!ctx.quality.reducedMotion) {
+        uniforms.uTime.value += dt;
+        breath += dt;
+        compose(1 + BREATH * Math.sin((2 * Math.PI * breath) / BREATH_S));
+      }
+
       const target = hot === null ? -1 : index.get(hot) ?? -1;
       let easing = false;
       for (let i = 0; i < n; i++) {
@@ -257,6 +305,38 @@ export function createConstellation(ctx: SceneContext, centre: THREE.Vector3, sc
         easing = true;
       }
       if (easing) paint();
+
+      // Stars give way, then spring home. Skipped entirely once everything is at rest, so an idle
+      // constellation costs nothing beyond the breath above.
+      if (!ctx.quality.reducedMotion && !settled) {
+        if (probed) at.copy(probed).applyMatrix4(toLocal.copy(group.matrix).invert());
+        let moving = false;
+        for (let i = 0; i < n; i++) {
+          const o = i * 3;
+          let [fx, fy, fz] = [0, 0, 0];
+          if (probed) {
+            const dx = positions[o] - at.x, dy = positions[o + 1] - at.y, dz = positions[o + 2] - at.z;
+            const d = Math.hypot(dx, dy, dz);
+            if (d < PUSH_R) {
+              // Falls off smoothly to nothing at the rim, so a star never snaps as the pointer passes.
+              const k = (PUSH_F * (1 - d / PUSH_R) ** 2) / Math.max(d, PUSH_R / 8);
+              (fx = dx * k), (fy = dy * k), (fz = dz * k);
+            }
+          }
+          for (let v = 0; v < 3; v++) {
+            const j = o + v;
+            const home = rest[j] - positions[j];
+            velocity[j] = (velocity[j] + ([fx, fy, fz][v] + home * SPRING) * dt) * DAMP;
+            positions[j] += velocity[j] * dt;
+            if (Math.abs(positions[j] - rest[j]) > REST_EPS || Math.abs(velocity[j]) > REST_EPS) moving = true;
+            else (positions[j] = rest[j]), (velocity[j] = 0);
+          }
+        }
+        starAttribute.needsUpdate = true;
+        restring();
+        settled = !moving && !probed;
+        if (moving) easing = true;
+      }
       return easing;
     },
     dispose() {
