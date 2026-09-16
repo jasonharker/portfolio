@@ -2,20 +2,23 @@
 // page's own root view transition: the persisted canvas has no view-transition-name, so it sits in
 // the root snapshot and fades with the prose. The still must therefore change within the swap
 // (astro:after-swap runs inside the transition's update callback), never after it.
+import { tierFor } from './routes';
 import type { Director, PlaceId, Stage } from './types';
 
 export function createStill(stage: Stage): Director {
-  const region = stage.tier('region'); // warm now, so a still is ready inside the swap
+  // Warm both readable tiers now, so a still is ready inside the swap whichever place comes first.
+  const tiers = { region: stage.tier('region'), local: stage.tier('local') };
   let gen = 0;
   let pending = false;
 
   const show = (place: PlaceId) => {
     const g = ++gen;
     pending = true;
-    region.then((t) => {
+    const id = tierFor(place);
+    tiers[id].then((t) => {
       if (g !== gen) return;
       pending = false;
-      stage.cut('region');
+      stage.cut(id);
       stage.pose(t.frame(place));
       stage.ctx.invalidate();
     });

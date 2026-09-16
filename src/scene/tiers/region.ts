@@ -12,7 +12,7 @@ import * as THREE from 'three';
 import { createConstellation, type Constellation } from '../constellation';
 import { createDust, type Dust } from '../dust';
 import { DISC_RADIUS, galaxyModel, prng, SEED } from '../galaxy-model';
-import { additive, createSky, SPIKES, vivid, type Sky } from '../jwst';
+import { additive, createSky, palette, SPIKES, vivid, type Sky } from '../jwst';
 import { createLabels, type Labels } from '../labels';
 import type { CameraPose, PlaceId, SceneContext, Tier, Waypoint } from '../types';
 
@@ -27,8 +27,6 @@ const HOVER_PX = 24; // CSS px from a star's projection that still hovers it
 const STAR_SIZE = 0.012; // kpc per unit of star luminosity; the Galaxy tier's 60k stars use 0.05, these are resolved
 const CLUSTER_RADIUS = [0.012, 0.05]; // kpc
 const SPIKE_SIZE = 0.08; // kpc across a bright star's sprite at full luminosity
-/** Token kelvins in tokens.css; the values themselves are read from CSS. */
-const KELVINS = [3000, 4300, 5600, 6800, 8500, 12000, 30000];
 
 const starsVertex = /* glsl */ `
   attribute vec4 tint; // rgb, a = size in kpc
@@ -184,18 +182,6 @@ function base(place: PlaceId) {
   return { target, position, right, up, back, distance };
 }
 
-/** Colour for a temperature: log-interpolated between the blackbody tokens, chroma pushed (jwst.ts). */
-function palette() {
-  const stops = KELVINS.map((k) => ({ lk: Math.log(k), c: vivid(ctx.colour(`--star-${k}`), 2.4) }));
-  return (t: number, out: THREE.Color) => {
-    const lt = Math.log(t);
-    let i = 0;
-    while (i < stops.length - 2 && lt > stops[i + 1].lk) i++;
-    const f = THREE.MathUtils.clamp((lt - stops[i].lk) / (stops[i + 1].lk - stops[i].lk), 0, 1);
-    return out.lerpColors(stops[i].c, stops[i + 1].c, f);
-  };
-}
-
 function track<T extends { dispose(): void }>(d: T): T {
   disposables.push(d);
   return d;
@@ -216,7 +202,7 @@ export const region: Tier = {
     scene = new THREE.Scene();
     ground = ctx.colour('--ground');
     const dpr = ctx.quality.dpr;
-    const colourOf = palette();
+    const colourOf = palette(ctx.colour);
     const col = new THREE.Color();
 
     // Stars: the seeded galaxy (a superset of the Galaxy tier's), then young clusters along the arms.

@@ -9,6 +9,7 @@ export const quality: Quality = {
   foreground: 40,
   brightStars: 1200,
   dustScale: 0.5,
+  lensScale: 0.5,
   bloom: true,
   reducedMotion: matchMedia('(prefers-reduced-motion: reduce)').matches,
 };

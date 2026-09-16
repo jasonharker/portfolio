@@ -1,5 +1,6 @@
 // Flights (spec §3): Region at the origin, cut to Galaxy, pan, cut to Region at the destination.
 // A flight is an array of beats, so M3 can put a Local beat at either end without a rewrite.
+import { tierFor } from './routes';
 import type { CameraPose, Director, PlaceId, Stage, Tier, TierId, Vec3 } from './types';
 
 interface Beat {
@@ -28,15 +29,17 @@ const same = (a: CameraPose, b: CameraPose) => [...a.position, ...a.target, a.fo
 export function createFlight(stage: Stage): Director {
   const canvas = stage.ctx.renderer.domElement;
   const tiers = {} as Record<TierId, Tier>;
-  // Warm both tiers now so the first flight doesn't wait on a load.
-  const ready = Promise.all((['region', 'galaxy'] as const).map((id) => stage.tier(id).then((t) => (tiers[id] = t))));
+  // Warm every tier now so the first flight doesn't wait on a load.
+  const ready = Promise.all((['region', 'galaxy', 'local'] as const).map((id) => stage.tier(id).then((t) => (tiers[id] = t))));
+  // The tier a place is read in, and its pose there.
+  const near = (place: PlaceId) => tiers[tierFor(place)];
 
   let beats: Beat[] = [];
   let t = 0; // seconds into beats[0]
   let started = false; // beats[0] has cut and read its poses
   let from: CameraPose;
   let to: CameraPose;
-  let shown: PlaceId | null = null; // what the region tier frames, or last framed before the galaxy cut
+  let shown: PlaceId | null = null; // what the near tier frames, or last framed before the galaxy cut
   let dest: PlaceId | null = null;
   let kick = 0; // post-cut blur, 1 -> 0
   let gen = 0; // bumps on every request, so a load that resolves late can't act on a stale one
@@ -51,8 +54,8 @@ export function createFlight(stage: Stage): Director {
   };
   const land = (place: PlaceId) => {
     stop();
-    stage.cut('region');
-    stage.pose(tiers.region.frame(place));
+    stage.cut(tierFor(place));
+    stage.pose(near(place).frame(place));
     shown = dest = place;
   };
 
@@ -63,20 +66,21 @@ export function createFlight(stage: Stage): Director {
     const origin = shown!;
     stop();
     dest = place;
-    if (tier === 'region' && origin === place) {
-      const f = tiers.region.frame(place);
+    // Already in the place's own tier: a short move, no cut. Galaxy is never a destination.
+    if (tier !== 'galaxy' && origin === place) {
+      const f = near(place).frame(place);
       if (same(pose, f)) return land(place);
-      beats = [{ tier: 'region', place, dur: 0.5 * s, ease: easeInOut, enter: () => ({ to: f }) }];
+      beats = [{ tier: tierFor(place), place, dur: 0.5 * s, ease: easeInOut, enter: () => ({ to: f }) }];
       return;
     }
-    if (tier === 'region') beats.push({ tier: 'region', place: origin, dur: 0.5 * s, ease: easeIn, enter: () => ({ to: back(tiers.region.frame(origin)) }) });
+    if (tier !== 'galaxy') beats.push({ tier: tierFor(origin), place: origin, dur: 0.5 * s, ease: easeIn, enter: () => ({ to: back(near(origin).frame(origin)) }) });
     beats.push({
       tier: 'galaxy', dur: 1.4 * s, ease: easeInOut,
       enter: () => ({ from: tier === 'galaxy' ? undefined : tiers.galaxy.frame(origin), to: tiers.galaxy.frame(place) }),
     });
     beats.push({
-      tier: 'region', place, dur: 0.6 * s, ease: easeOut,
-      enter: () => { const f = tiers.region.frame(place); return { from: back(f), to: f }; },
+      tier: tierFor(place), place, dur: 0.6 * s, ease: easeOut,
+      enter: () => { const f = near(place).frame(place); return { from: back(f), to: f }; },
     });
   };
 

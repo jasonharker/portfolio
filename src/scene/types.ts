@@ -2,7 +2,7 @@
 import type * as THREE from 'three';
 
 export type PlaceId = 'constellation' | 'incidents' | 'gitops' | 'documentation';
-export type TierId = 'galaxy' | 'region'; // 'local' arrives in M3
+export type TierId = 'galaxy' | 'region' | 'local';
 export type Vec3 = [number, number, number];
 export type Layer = 'physical' | 'proxmox' | 'kubernetes' | 'services';
 
@@ -10,6 +10,9 @@ export interface TopologyNode { id: string; role: string; layer: Layer; pos?: Ve
 export interface Waypoint { id: PlaceId; pos: Vec3; focus?: string[] }
 /** Mirrors the validated schema in src/content.config.ts. Galaxy units ≈ kpc, disc in XZ, core at origin. */
 export interface Topology { nodes: TopologyNode[]; links: { from: string; to: string }[]; waypoints: Waypoint[] }
+
+/** One incident, one planet in the Local orrery. Mirrors the collection schema in src/content.config.ts. */
+export interface Incident { slug: string; label: string; order: number; focus: string[] }
 
 /** Chosen once at startup (quality.ts). Tiers read counts from here, never hardcode them. */
 export interface Quality {
@@ -20,6 +23,7 @@ export interface Quality {
   foreground: number; // foreground stars with diffraction spikes, shared by both tiers
   brightStars: number; // Region: the most luminous young stars, drawn with spikes when near enough
   dustScale: number; // the disc dust pass renders at this fraction of CSS pixels
+  lensScale: number; // Local: the black hole's ray-marched lens pass, same trick as dustScale
   bloom: boolean;
   reducedMotion: boolean;
 }
@@ -31,6 +35,7 @@ export interface SceneContext {
   renderer: THREE.WebGLRenderer;
   camera: THREE.PerspectiveCamera;
   topology: Topology;
+  incidents: Incident[]; // sorted by `order`, best first
   quality: Quality;
   /** DOM layer for labels, persisted across navigation, sized to the viewport. */
   labels: HTMLElement;
@@ -43,13 +48,16 @@ export interface SceneContext {
 export interface Tier {
   id: TierId;
   load(ctx: SceneContext): Promise<void>; // called once, on first use
-  frame(place: PlaceId): CameraPose; // where the camera sits to show this place
+  // Where the camera sits to show this place. A tier is only asked for the places routes.ts's
+  // tierFor() gives it, except Galaxy, which frames all four: every flight pans across it.
+  frame(place: PlaceId): CameraPose;
   // Called every rendered frame, ambient ones included. true = animating at full rate (a hover
   // easing, say). Idle life (twinkle, drift) advances by dt and returns false: the loop keeps it at <=30 fps.
   update(dt: number): boolean;
   /** Mouse pointer in CSS pixels, NaN when it leaves. Not called for touch. Return nothing; call ctx.invalidate() to animate. */
   hover?(x: number, y: number): void;
   hot?(): string | null; // id of the topology node under the pointer, or null (read into __scene.hot)
+  href?(): string | null; // the URL a click on the pointer's target would open, or null
   render(renderer: THREE.WebGLRenderer, camera: THREE.Camera): void;
   resize?(width: number, height: number): void; // CSS pixels; renderer is already resized
   show?(visible: boolean): void; // e.g. hide DOM labels when the tier is cut away
@@ -93,6 +101,7 @@ export interface SceneDebug {
   idle: boolean; // no frame is scheduled
   rate: 'full' | 'ambient' | 'idle'; // ambient: only the ≤30 fps idle animation is running
   hot: string | null; // the constellation star under the pointer, or null
+  tier: TierId | null; // the tier being rendered; null until the first cut
   paused: boolean;
   parallax: number; // eased mouse offset, 0 at rest, up to ~1.4 in a viewport corner
   sway: number; // camera offset from the director's pose, as a fraction of view distance (parallax + drift)
