@@ -305,7 +305,7 @@ export const region: Tier = {
     }));
 
     // The same kpc dust field as the Galaxy tier, seen close (look 1: absorbing lanes, HII), and the same sky.
-    dust = track(createDust(model, 1, 1, ctx.quality.dustScale, 7));
+    dust = track(createDust(model, 1, 1, ctx.quality.dustScale, 5));
     dust.resize(width, height);
     dust.composite.renderOrder = 0.5;
     sky = track(createSky(ctx.quality.deepField, ctx.quality.foreground, dpr, ctx.colour));
