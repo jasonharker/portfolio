@@ -6,8 +6,9 @@
 // Look (a false-colour composite, so constants, not tokens): at `look` 0 (Galaxy, the MIRI view of
 // M74) the dust glows in thin braided lanes along the arms that fray into spurs, over a fainter lacy
 // web between them, deep red where thin through amber to pale gold, holed by cavities, with pink and
-// white star-forming knots; at `look` 1 (Region, a PHANGS crop) the same dust mostly absorbs, as dark
-// lanes over the starlight, and the knots show as pink HII regions with teal fringes.
+// white star-forming knots; at `look` 1 (Region, a PHANGS crop) the same filaments glow warm over a
+// near-black ground, dark bubbles are rimmed with light, what starlight there is stays patchy and in
+// the arm, dust absorbs where it crosses it, and the knots are clumpy pink HII with teal fringes.
 //
 // Cost: full-screen noise, so it renders into its own target at quality.dustScale of CSS pixels and
 // is composited with one full-screen triangle: rgb adds, alpha absorbs whatever was drawn before it.
@@ -123,9 +124,16 @@ const fragment = /* glsl */ `
       d.y *= 1.0 + 0.8 * h.y;
       float q = length(d) / eff;
       float lum = (rad * rad) / (eff * eff) * keep * (0.25 + 0.75 * fract(h.y * 7.3) * fract(h.y * 7.3));
-      float core = exp(-q * q * 2.0) * lum;
+      // Resolved (Region), an HII region is clumpy and its shell broken: lobes in the core, arcs in the ring.
+      float lobes = 1.0, arcs = 1.0;
+      if (uLook > 0.5) {
+        float a = atan(d.y, d.x);
+        lobes = 0.55 + 0.45 * sin(2.0 * a + 19.0 * k.y);
+        arcs = 0.15 + 0.85 * max(0.0, sin(3.0 * a - 11.0 * h.y));
+      }
+      float core = exp(-q * q * 2.0) * lum * lobes;
       sum.x += core;
-      sum.y += exp(-(q - 1.5) * (q - 1.5) / 0.2) * lum;
+      sum.y += exp(-(q - 1.5) * (q - 1.5) / 0.2) * lum * arcs;
       if (core > top) {
         top = core;
         sum.z = k.y;
@@ -184,9 +192,10 @@ const fragment = /* glsl */ `
     float smallLod = 1.0 - smoothstep(0.02, 0.05, px);
     vec2 small = smallLod > 0.0 ? cavities(cw + 3.7, 0.3, 0.15 + 0.45 * arm) : vec2(9.0, 0.0);
     small.y *= smallLod;
-    float hole = mix(1.0, 0.1 + 0.9 * smoothstep(0.4, 1.0, big.x), big.y) * mix(1.0, 0.1 + 0.9 * smoothstep(0.35, 1.0, small.x), small.y);
+    float floorDust = mix(0.1, 0.03, uLook); // the Region tier's bubbles are emptier still
+    float hole = mix(1.0, floorDust + (1.0 - floorDust) * smoothstep(0.4, 1.0, big.x), big.y) * mix(1.0, floorDust + (1.0 - floorDust) * smoothstep(0.35, 1.0, small.x), small.y);
     float rim = big.y * exp(-(big.x - 1.0) * (big.x - 1.0) / 0.04) + small.y * exp(-(small.x - 1.0) * (small.x - 1.0) / 0.05);
-    dust = dust * hole * (1.0 + 1.5 * rim);
+    dust = dust * hole * (1.0 + mix(1.5, 2.2, uLook) * rim);
 
     // Star-forming knots where the arms are, carving their own small clearings. Small ones resolve closer.
     float sfProb = 0.55 * arm * edge * inner;
@@ -201,22 +210,25 @@ const fragment = /* glsl */ `
     // Diffuse starlight: an exponential disc, arms, and the bulge.
     float disc = exp(-r / 4.2) * edge;
     float bulge = exp(-r * r / 0.5) * 1.1 + exp(-r / 1.1) * 0.25;
-    float light = disc * mix(0.08 + 0.35 * stars, 0.3 + 0.6 * stars, uLook) + bulge;
+    // Close up there is no smooth floor of starlight: it is patchy, gathered in the arm and near black
+    // between, and the bulge is left to the tier's own core glow rather than painted on the plane.
+    float patchy = (0.02 + 0.5 * stars * stars) * (0.3 + 0.7 * smoothstep(-0.5, 0.5, warp.y));
+    float light = disc * mix(0.08 + 0.35 * stars, patchy, uLook) + bulge * mix(1.0, 0.08, uLook);
     vec3 starColour = mix(mix(vec3(0.4, 0.6, 1.0), vec3(1.0, 0.86, 0.74), uLook), vec3(0.85, 0.92, 1.0), clamp(bulge, 0.0, 1.0));
 
     // Galaxy (MIRI): the dust glows, deep red where thin, through red-orange and amber to pale gold where
     // it piles up. Region: the same dust mostly absorbs, a dark lane with a faint warm edge.
-    float heat = dust * (1.0 - 0.8 * uLook); // the Region tier's faint edge glow stays red-orange
+    float heat = dust * (1.0 - 0.6 * uLook); // resolved, the filaments rarely pile up to gold
     vec3 ramp = mix(vec3(0.3, 0.02, 0.01), vec3(0.9, 0.2, 0.03), smoothstep(0.0, 0.5, heat));
     ramp = mix(ramp, vec3(1.0, 0.5, 0.1), smoothstep(0.6, 1.8, heat));
     ramp = mix(ramp, vec3(1.0, 0.8, 0.5), smoothstep(2.2, 5.0, heat));
-    float absorb = clamp(dust * mix(0.15, 1.0, uLook), 0.0, 0.95);
-    vec3 rgb = starColour * light * mix(0.5, 0.8, uLook) * (1.0 - absorb) + ramp * mix(dust * 0.3, min(dust, 1.0) * 0.05, uLook);
+    float absorb = clamp(dust * mix(0.15, 0.7, uLook), 0.0, 0.95);
+    vec3 rgb = starColour * light * mix(0.5, 0.55, uLook) * (1.0 - absorb) + ramp * dust * mix(0.3, 0.11, uLook);
 
     // Knots: pink to white in the Galaxy tier; in the Region tier pink HII cores with teal-cyan fringes.
     vec3 pink = mix(vec3(1.0, 0.35, 0.7), vec3(1.0, 0.85, 0.92), smoothstep(0.3, 1.0, kn.z));
     vec3 teal = vec3(0.12, 0.8, 0.85);
-    rgb += (pink * kn.x * mix(3.0, 1.1, uLook) + teal * kn.y * mix(0.05, 0.35, uLook) * clump) * (0.5 + clump) * edge;
+    rgb += (pink * kn.x * mix(3.0, 0.7, uLook) + teal * kn.y * mix(0.05, 0.22, uLook) * clump) * (0.5 + clump) * edge;
 
     rgb *= uGain;
     // Dither: the target is 8-bit.
@@ -231,8 +243,18 @@ const compositeVertex = /* glsl */ `
 const compositeFragment = /* glsl */ `
   uniform sampler2D uDust;
   uniform vec2 uSize; // drawing-buffer pixels of the target being composited into
+  uniform vec2 uTexel; // one dust texel in uv
   void main() {
-    vec4 d = texture2D(uDust, gl_FragCoord.xy / uSize);
+    vec2 uv = gl_FragCoord.xy / uSize;
+    #ifdef SOFT
+      // Seen at a grazing angle the target's texels are several screen pixels long and the lanes stair-step;
+      // four bilinear taps half a texel out spread that over a tent, for the cost of three more fetches.
+      vec2 o = uTexel * 0.5;
+      vec4 d = 0.25 * (texture2D(uDust, uv + o) + texture2D(uDust, uv - o)
+        + texture2D(uDust, uv + vec2(o.x, -o.y)) + texture2D(uDust, uv - vec2(o.x, -o.y)));
+    #else
+      vec4 d = texture2D(uDust, uv);
+    #endif
     gl_FragColor = vec4(d.rgb, d.a);
     #include <colorspace_fragment>
   }
@@ -275,9 +297,10 @@ export function createDust(model: GalaxyModel, look: number, gain: number, scale
 
   const triangle = new THREE.BufferGeometry();
   triangle.setAttribute('position', new THREE.Float32BufferAttribute([-1, -1, 0, 3, -1, 0, -1, 3, 0], 3));
-  const compositeUniforms = { uDust: { value: target.texture }, uSize: { value: new THREE.Vector2(1, 1) } };
+  const compositeUniforms = { uDust: { value: target.texture }, uSize: { value: new THREE.Vector2(1, 1) }, uTexel: { value: new THREE.Vector2(1, 1) } };
   const compositeMaterial = new THREE.ShaderMaterial({
     vertexShader: compositeVertex, fragmentShader: compositeFragment, uniforms: compositeUniforms,
+    defines: look > 0.5 ? { SOFT: '' } : {},
     blending: THREE.CustomBlending, blendSrc: THREE.OneFactor, blendDst: THREE.OneMinusSrcAlphaFactor,
     blendSrcAlpha: THREE.ZeroFactor, blendDstAlpha: THREE.OneFactor,
     depthTest: false, depthWrite: false, transparent: true,
@@ -320,6 +343,7 @@ export function createDust(model: GalaxyModel, look: number, gain: number, scale
     resize(width, height) {
       target.setSize(Math.max(1, Math.round(width * scale)), Math.max(1, Math.round(height * scale)));
       this.size.set(target.width, target.height);
+      compositeUniforms.uTexel.value.set(1 / target.width, 1 / target.height);
     },
     dispose() {
       for (const d of [target, geometry, material, triangle, compositeMaterial]) d.dispose();
