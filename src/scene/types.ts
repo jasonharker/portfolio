@@ -25,7 +25,6 @@ export interface Quality {
   foreground: number; // foreground stars with diffraction spikes, shared by both tiers
   brightStars: number; // Region: the most luminous young stars, drawn with spikes when near enough
   dustScale: number; // the disc dust pass renders at this fraction of CSS pixels
-  lensScale: number; // Local: the black hole's ray-marched lens pass, same trick as dustScale
   bloom: boolean;
   reducedMotion: boolean;
 }

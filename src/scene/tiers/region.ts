@@ -20,7 +20,7 @@ import { createDust, type Dust } from '../dust';
 import { DISC_RADIUS, galaxyModel, prng, SEED } from '../galaxy-model';
 import { additive, createSky, palette, SPIKES, vivid, type Sky } from '../jwst';
 import { createLabels, type Labels } from '../labels';
-import { createBlackHole } from '../local/blackhole';
+import { createNebula } from '../local/nebula';
 import { createOrrery } from '../local/orrery';
 import { createShip } from '../local/ship';
 import type { CameraPose, LocalPlace, PlaceId, SceneContext, Tier, Waypoint } from '../types';
@@ -274,12 +274,19 @@ export const region: Tier = {
     glow.frustumCulled = false;
     glow.renderOrder = 1;
 
-    // The constellation faces the camera that frames it.
+    // The constellation stands in the arm rather than facing the camera square-on. A plate parallel
+    // to the image plane is the strongest decal cue there is — no foreshortening, no parallax, every
+    // star the same distance away — and it was why the topology read as printed over the galaxy
+    // instead of sitting in it. Swung off the view axis, its own depth does the rest.
     const b = base('constellation');
-    constellation = createConstellation(ctx, b.target, CONSTELLATION_SCALE, new THREE.Matrix4().makeBasis(b.right, b.up, b.back), DISTANCE * 1.3);
-    // The plane the stars lie in. The pointer is projected onto it so the repulsion happens in the
-    // constellation's own space rather than in screen space (spec §3).
-    plane = new THREE.Plane().setFromNormalAndCoplanarPoint(b.back.clone().normalize(), b.target);
+    const basis = new THREE.Matrix4().makeBasis(b.right, b.up, b.back)
+      .multiply(new THREE.Matrix4().makeRotationY(THREE.MathUtils.degToRad(24)))
+      .multiply(new THREE.Matrix4().makeRotationX(THREE.MathUtils.degToRad(-9)));
+    constellation = createConstellation(ctx, b.target, CONSTELLATION_SCALE, basis, DISTANCE * 1.3);
+    // The plane the stars lie in — now the swung one. The pointer is projected onto it so the
+    // repulsion happens in the constellation's own space rather than in screen space (spec §3).
+    const normal = new THREE.Vector3().setFromMatrixColumn(basis, 2).normalize();
+    plane = new THREE.Plane().setFromNormalAndCoplanarPoint(normal, b.target);
     constellation.resize(dpr);
     track(constellation);
     labels = createLabels(ctx.labels, ctx.topology.nodes, constellation.world);
@@ -289,7 +296,7 @@ export const region: Tier = {
     // The destinations. Each is built in its own units and then scaled so the distance its pose()
     // asks for is READ kpc; 16:9 is the reference, so the scale is a property of the place and not
     // of the viewport. Nothing else about the object is touched.
-    const built = { incidents: createOrrery(ctx), gitops: createShip(ctx), documentation: createBlackHole(ctx) };
+    const built = { incidents: createOrrery(ctx), gitops: createShip(ctx), documentation: createNebula(ctx) };
     for (const [id, place] of Object.entries(built) as [keyof typeof built, LocalPlace][]) {
       const p = place.pose(16 / 9);
       // The tier has one lens (a flight that changed FOV mid-move would read as a zoom on top of the
@@ -440,6 +447,7 @@ export const region: Tier = {
     width = ctx.labels.clientWidth || w;
     height = ctx.labels.clientHeight || h;
     dust?.resize(w, h);
+    for (const p of Object.values(places)) p.place.resize?.(width, height);
   },
 
   show(on) {

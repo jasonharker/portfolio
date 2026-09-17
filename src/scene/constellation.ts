@@ -18,7 +18,10 @@ const HALF_H = 1.05;
 // 1080p framing; stars closer than this in both axes have overlapping labels.
 const CELL_W = 0.5;
 const CELL_H = 0.14;
-const DEPTH = 0.12;
+// Depth through the layout, local units. Deep enough that the near stars read visibly larger than
+// the far ones: at a plate's worth of depth the whole thing projects flat and reads as a decal
+// printed over the galaxy rather than as something standing in it.
+const DEPTH = 0.62;
 
 /** FNV-1a, 32-bit. */
 function hash(s: string): number {
@@ -109,6 +112,7 @@ const SIZE = 110; // sprite CSS px at the framing distance; the core is a fracti
 const vertex = /* glsl */ `
   attribute vec3 tint;
   attribute vec2 life; // twinkle phase 0..1, hover glow 0..1
+  attribute float mag; // relative brightness, from how many links the node carries
   uniform float size;
   uniform float near;
   uniform float uTime;
@@ -121,7 +125,7 @@ const vertex = /* glsl */ `
     gl_Position = projectionMatrix * mv;
     // Full size at the framing distance; shrinks from afar so the lab doesn't read as one blob.
     float k = clamp(near / -mv.z, 0.12, 1.0);
-    float px = size * k * (1.0 + 0.3 * life.y);
+    float px = size * k * mag * (1.0 + 0.3 * life.y);
     gl_PointSize = px;
     vPx = px * 0.5;
     vHeat = life.y;
@@ -181,11 +185,19 @@ export function createConstellation(ctx: SceneContext, centre: THREE.Vector3, sc
   const positions = new Float32Array(n * 3);
   const colours = new Float32Array(n * 3);
   const life = new Float32Array(n * 2);
+  const mag = new Float32Array(n);
   const tint = new Map(LAYERS.map((l) => [l, vivid(ctx.colour(`--layer-${l}`), 2.4)]));
+  // A real field has a luminosity function; a diagram where every point is identical reads as a
+  // diagram. The variation is the data rather than noise: a node carrying many links is a brighter
+  // star, so the hosts everything hangs off are the ones that catch the eye.
+  const degree = new Map(topology.nodes.map((node) => [node.id, 0]));
+  for (const l of topology.links) for (const end of [l.from, l.to]) degree.set(end, (degree.get(end) ?? 0) + 1);
+  const busiest = Math.max(1, ...degree.values());
   topology.nodes.forEach((node, i) => {
     local.get(node.id)!.toArray(positions, i * 3);
     tint.get(node.layer)!.toArray(colours, i * 3);
     life[i * 2] = hash(node.id) / 4294967296;
+    mag[i] = 0.62 + 0.55 * Math.sqrt((degree.get(node.id) ?? 0) / busiest);
   });
 
   const starGeometry = new THREE.BufferGeometry();
@@ -193,6 +205,7 @@ export function createConstellation(ctx: SceneContext, centre: THREE.Vector3, sc
   starGeometry.setAttribute('tint', new THREE.BufferAttribute(colours, 3));
   const lifeAttribute = new THREE.BufferAttribute(life, 2);
   starGeometry.setAttribute('life', lifeAttribute);
+  starGeometry.setAttribute('mag', new THREE.BufferAttribute(mag, 1));
   const uniforms = { size: { value: SIZE }, near: { value: viewDistance }, uTime: { value: 0 }, dpr: { value: 1 } };
   const starMaterial = new THREE.ShaderMaterial({ uniforms, vertexShader: vertex, fragmentShader: fragment, ...additive });
   const stars = new THREE.Points(starGeometry, starMaterial);
