@@ -1,52 +1,60 @@
-// Flights (spec §3): Region at the origin, cut to Galaxy, pan, cut to Region at the destination.
-// A flight is an array of beats, so M3 can put a Local beat at either end without a rewrite.
-import { tierFor } from './routes';
+// Flights (M4). A flight is one continuous dolly, not a sequence of beats: the camera arcs out from
+// the place it is reading, across the disc, and back down into the next one, in a single move with
+// nothing cut and nothing blurred. What makes that possible is one space — every pose here is in
+// galaxy units (kpc), and a place's own scale lives in its group, not in the camera (tiers/region.ts).
+//
+// The path: the target slides from one waypoint to the other, the view direction slerps, and the
+// *logarithm* of the view distance runs along a quadratic through a cruise altitude. Constant
+// d(log r)/dt is what a zoom across scales has to be to read as one speed rather than a lunge —
+// a metre per second means nothing when the frame is 30,000 light years wide, and everything when
+// it is 30 wide. The ease then spends the time at the two ends, where there is something to look at.
+//
+// The tier follows from the distance rather than from a beat: above CROSSOVER the Galaxy tier draws,
+// below it Region does, and both draw the same seeded galaxy from the same pose, so the swap is a
+// change of level of detail rather than a change of place.
 import type { CameraPose, Director, PlaceId, Stage, Tier, TierId, Vec3 } from './types';
 
-interface Beat {
-  tier: TierId;
-  place?: PlaceId; // the place a region beat frames
-  dur: number; // seconds
-  ease: (k: number) => number;
-  // Read when the beat starts, never earlier: a tier's frame() may switch what it shows.
-  // No `from` means start where the camera already is.
-  enter(): { from?: CameraPose; to: CameraPose };
-}
-
-const BLUR_PX = 6; // peak canvas blur at a cut
-const BLUR_S = 0.16; // ramp into a cut and decay out of it
-const easeIn = (k: number) => k * k * k;
-const easeOut = (k: number) => 1 - (1 - k) ** 3;
+const CROSSOVER = 8; // kpc: Galaxy above, Region below
+const DUR = 2.4; // seconds, place to place
+const NEAR_DUR = 0.6; // seconds for a reframe that never leaves the place
 const easeInOut = (k: number) => (k < 0.5 ? 4 * k * k * k : 1 - (-2 * k + 2) ** 3 / 2);
 const mix = (a: Vec3, b: Vec3, k: number) => a.map((v, i) => v + (b[i] - v) * k) as Vec3;
-const lerp = (a: CameraPose, b: CameraPose, k: number): CameraPose => ({
-  position: mix(a.position, b.position, k), target: mix(a.target, b.target, k), fov: a.fov + (b.fov - a.fov) * k,
-});
-// Pulled back along the view line with a wider lens: the whoosh either side of a cut. Unit-free.
-const back = (p: CameraPose): CameraPose => ({ position: mix(p.target, p.position, 2.2), target: p.target, fov: p.fov + 20 });
-const same = (a: CameraPose, b: CameraPose) => [...a.position, ...a.target, a.fov].every((v, i) => Math.abs(v - [...b.position, ...b.target, b.fov][i]) < 1e-6);
+const sub = (a: Vec3, b: Vec3) => a.map((v, i) => v - b[i]) as Vec3;
+const len = (a: Vec3) => Math.hypot(...a);
+const scale = (a: Vec3, k: number) => a.map((v) => v * k) as Vec3;
+const same = (a: CameraPose, b: CameraPose) => [...a.position, ...a.target].every((v, i) => Math.abs(v - [...b.position, ...b.target][i]) < 1e-9);
+
+/** Shortest-arc interpolation between two unit vectors; falls back to a lerp when they're close. */
+function slerp(a: Vec3, b: Vec3, k: number): Vec3 {
+  const dot = Math.min(1, Math.max(-1, a[0] * b[0] + a[1] * b[1] + a[2] * b[2]));
+  const omega = Math.acos(dot);
+  if (omega < 1e-3) return a.map((v, i) => v + (b[i] - v) * k) as Vec3;
+  const s = Math.sin(omega);
+  const [wa, wb] = [Math.sin((1 - k) * omega) / s, Math.sin(k * omega) / s];
+  return a.map((v, i) => v * wa + b[i] * wb) as Vec3;
+}
 
 export function createFlight(stage: Stage): Director {
-  const canvas = stage.ctx.renderer.domElement;
   const tiers = {} as Record<TierId, Tier>;
-  // Warm every tier now so the first flight doesn't wait on a load.
-  const ready = Promise.all((['region', 'galaxy', 'local'] as const).map((id) => stage.tier(id).then((t) => (tiers[id] = t))));
-  // The tier a place is read in, and its pose there.
-  const near = (place: PlaceId) => tiers[tierFor(place)];
+  // Warm both tiers now so the first flight doesn't wait on a load.
+  const ready = Promise.all((['region', 'galaxy'] as const).map((id) => stage.tier(id).then((t) => (tiers[id] = t))));
 
-  let beats: Beat[] = [];
-  let t = 0; // seconds into beats[0]
-  let started = false; // beats[0] has cut and read its poses
+  let flying = false;
+  let t = 0; // seconds into the flight
+  let dur = DUR;
   let from: CameraPose;
   let to: CameraPose;
-  let shown: PlaceId | null = null; // what the near tier frames, or last framed before the galaxy cut
+  // The dolly, precomputed at the start: view direction and log-distance at each end, and the middle
+  // control point of the quadratic through them.
+  let dir0: Vec3, dir1: Vec3, l0 = 0, l1 = 0, lc = 0;
   let dest: PlaceId | null = null;
-  let kick = 0; // post-cut blur, 1 -> 0
   let gen = 0; // bumps on every request, so a load that resolves late can't act on a stale one
   let pending = false;
 
-  const blur = (k: number) => (canvas.style.filter = k > 0.01 ? `blur(${(k * BLUR_PX).toFixed(2)}px)` : '');
-  const stop = () => ((beats = []), (started = false), (t = 0), (kick = 0), blur(0));
+  const frame = (place: PlaceId) => tiers.region.frame!(place);
+  /** The tier that draws at this view distance. Called every frame: a flight crosses it twice. */
+  const level = (r: number) => stage.cut(r > CROSSOVER ? 'galaxy' : 'region');
+  const stop = () => ((flying = false), (t = 0));
   const when = (fn: () => void) => {
     const g = ++gen;
     pending = true;
@@ -54,79 +62,64 @@ export function createFlight(stage: Stage): Director {
   };
   const land = (place: PlaceId) => {
     stop();
-    stage.cut(tierFor(place));
-    stage.pose(near(place).frame(place));
-    shown = dest = place;
+    const pose = frame(place);
+    level(len(sub(pose.position, pose.target)));
+    stage.pose(pose);
+    dest = place;
   };
 
   const plan = (place: PlaceId) => {
     const { tier, pose } = stage.current();
     if (!tier) return land(place);
-    const s = place === 'constellation' || shown === 'constellation' ? 0.72 : 1; // Landing starts at Region
-    const origin = shown!;
-    stop();
+    const target = frame(place);
+    if (same(pose, target)) return land(place);
+    from = pose;
+    to = target;
     dest = place;
-    // Already in the place's own tier: a short move, no cut. Galaxy is never a destination.
-    if (tier !== 'galaxy' && origin === place) {
-      const f = near(place).frame(place);
-      if (same(pose, f)) return land(place);
-      beats = [{ tier: tierFor(place), place, dur: 0.5 * s, ease: easeInOut, enter: () => ({ to: f }) }];
-      return;
-    }
-    if (tier !== 'galaxy') beats.push({ tier: tierFor(origin), place: origin, dur: 0.5 * s, ease: easeIn, enter: () => ({ to: back(near(origin).frame(origin)) }) });
-    beats.push({
-      tier: 'galaxy', dur: 1.4 * s, ease: easeInOut,
-      enter: () => ({ from: tier === 'galaxy' ? undefined : tiers.galaxy.frame(origin), to: tiers.galaxy.frame(place) }),
-    });
-    beats.push({
-      tier: tierFor(place), place, dur: 0.6 * s, ease: easeOut,
-      enter: () => { const f = near(place).frame(place); return { from: back(f), to: f }; },
-    });
+    dir0 = scale(sub(from.position, from.target), 1 / (l0 = len(sub(from.position, from.target))));
+    dir1 = scale(sub(to.position, to.target), 1 / (l1 = len(sub(to.position, to.target))));
+    [l0, l1] = [Math.log(l0), Math.log(l1)];
+    // A move that stays inside the place — a second click on the same page, a resize — has nowhere
+    // to climb to: run it straight and short. Otherwise arc out so that at the halfway point the
+    // whole disc is in frame, which is what a quadratic through log(CRUISE) at k = 0.5 gives.
+    const near = len(sub(from.target, to.target)) < 1;
+    dur = near ? NEAR_DUR : DUR;
+    // The Galaxy tier already knows the distance at which the whole disc fits this viewport; that
+    // is the altitude to arc over, rather than a constant that would clip the disc on a phone.
+    const over = tiers.galaxy.frame!(place);
+    const cruise = Math.max(len(sub(over.position, over.target)), Math.exp(l0), Math.exp(l1));
+    lc = near ? (l0 + l1) / 2 : 2 * Math.log(cruise) - (l0 + l1) / 2;
+    t = 0;
+    flying = true;
   };
 
   return {
     to(place, { instant }) {
       if (place === 'resume') {
-        // Not a place: freeze wherever we are. With nothing shown yet, a pending request still lands.
+        // Not a place yet (M4 phase 2 gives it one): freeze wherever we are. With nothing shown, a
+        // pending request still lands.
         if (stage.current().tier) return (gen++, (pending = false), stop());
         if (!pending) when(() => land('constellation'));
         return;
       }
-      if (!instant && beats.length && dest === place) return; // already flying there
+      if (!instant && flying && dest === place) return; // already flying there
       dest = place;
       when(() => (instant ? land(place) : plan(place)));
     },
     skip() {
-      if (beats.length) land(dest!);
+      if (flying) land(dest!);
       else if (pending && dest) when(() => land(dest!));
     },
     update(dt) {
-      if (!beats.length) return false;
+      if (!flying) return false;
       t += dt;
-      let b: Beat;
-      for (;;) {
-        b = beats[0];
-        if (!started) {
-          started = true;
-          if (stage.current().tier !== b.tier) kick = 1;
-          stage.cut(b.tier);
-          if (b.place) shown = b.place;
-          const p = b.enter();
-          from = p.from ?? stage.current().pose;
-          to = p.to;
-        }
-        if (t < b.dur) break;
-        t -= b.dur;
-        stage.pose(to);
-        beats.shift();
-        started = false;
-        if (!beats.length) return (stop(), false);
-      }
-      const next = beats[1];
-      const ramp = next && next.tier !== b.tier ? 1 - (b.dur - t) / BLUR_S : 0;
-      blur(Math.max(kick, ramp));
-      kick = Math.max(0, kick - dt / BLUR_S);
-      stage.pose(lerp(from, to, b.ease(t / b.dur)));
+      if (t >= dur) return (land(dest!), false);
+      const k = easeInOut(t / dur);
+      const target = mix(from.target, to.target, k);
+      const r = Math.exp((1 - k) * (1 - k) * l0 + 2 * (1 - k) * k * lc + k * k * l1);
+      const dir = slerp(dir0, dir1, k);
+      level(r);
+      stage.pose({ position: target.map((v, i) => v + dir[i] * r) as Vec3, target, fov: from.fov + (to.fov - from.fov) * k });
       return true;
     },
   };

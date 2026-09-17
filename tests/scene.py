@@ -267,19 +267,21 @@ def main():
         fb, took = pg.evaluate('__scene.frames'), time.time() - t0
         check('idle life: ambient, at most 30 fps', 0 < fb - fa <= 30 * took + 3 and pg.evaluate("__scene.rate === 'ambient'"), f'frames {fa}->{fb} in {took:.1f}s')
 
-        # --- the Local tier (M3) ------------------------------------------------------------
-        # Every place except the constellation is read in the Local tier. Before M3 all four were
-        # framed by Region, so a wrong tier here is the regression that matters.
+        # --- arriving at a place (M3, rewritten M4) -------------------------------------------
+        # M3 read each place in a Local tier of its own and this asserted the tier. M4 has one tier
+        # below the galaxy, so the invariant is the object rather than the tier: the flight ends
+        # close enough to the destination that it, and nothing else, is the thing being read.
         for path, place in (('/incidents/', 'incidents'), ('/gitops/', 'gitops'), ('/documentation/', 'documentation')):
             pg.click(f'.masthead a[href="{path}"]')
             wait(pg, f'__scene.path === {path!r}')
             settle(pg)
-            st = pg.evaluate('({tier: __scene.tier, place: __scene.place})')
-            check(f'local: {path} is read in the Local tier', st == {'tier': 'local', 'place': place}, str(st))
+            st = pg.evaluate('({reading: __scene.reading, tier: __scene.tier, place: __scene.place})')
+            check(f'place: {path} arrives at its object', st == {'reading': place, 'tier': 'region', 'place': place}, str(st))
         pg.click('a.wordmark')
         wait(pg, "__scene.path === '/'")
         settle(pg)
-        check('local: the constellation stays in the Region tier', pg.evaluate("__scene.tier === 'region'"), str(pg.evaluate('__scene.tier')))
+        st = pg.evaluate('({reading: __scene.reading, tier: __scene.tier})')
+        check('place: the constellation reads no object', st == {'reading': None, 'tier': 'region'}, str(st))
 
         # Flights, skip, retarget (W3). Baseline: a full flight between two non-landing places.
         pg.click('nav a[href="/gitops/"]')
@@ -332,9 +334,9 @@ def main():
         st = dl.evaluate('({instantAt: __scene.instantAt, flights: __scene.flights.length, place: __scene.place})')
         check('deep link opens at destination, no flight',
               st == {'instantAt': '/incidents/lorem-ipsum-dolor/', 'flights': 0, 'place': 'incidents'} and not flew, str(st))
-        # The tier matters as much as the place: land() used to cut to Region whatever the
-        # destination, which would show an incident from a tenth of the disc away.
-        check('deep link lands in the destination tier, not Region', dl.evaluate("__scene.tier === 'local'"), dl.evaluate('__scene.tier'))
+        # The distance matters as much as the place: land() used to frame every destination from a
+        # tenth of the disc away, which showed an incident as a marker rather than as the orrery.
+        check('deep link lands at the object, not out in the arm', dl.evaluate("__scene.reading === 'incidents'"), dl.evaluate('__scene.reading'))
         drain_csp(dl, 'deeplink')
         dl.close()
 
@@ -360,9 +362,9 @@ def main():
         rm.wait_for_timeout(1000)
         rb = rm.evaluate('__scene.frames')
         check('reduced motion: no idle life, loop stops', ra == rb and rm.evaluate('__scene.idle'), f'frames {ra}->{rb}')
-        # createStill() had the same Region-only hardcode as land(): under reduced motion every
-        # place, Local ones included, was shown as a Region still.
-        check('reduced motion: a Local place stills in the Local tier', rm.evaluate("__scene.tier === 'local'"), str(rm.evaluate('__scene.tier')))
+        # createStill() had the same framed-from-the-arm hardcode as land(): under reduced motion a
+        # place was stilled from a tenth of the disc away instead of at its object.
+        check('reduced motion: a place stills at its object', rm.evaluate("__scene.reading === 'gitops'"), str(rm.evaluate('__scene.reading')))
         rm.mouse.move(40, 40)
         rm.mouse.move(1200, 650, steps=8)
         rm.wait_for_timeout(1000)

@@ -244,6 +244,7 @@ const compositeFragment = /* glsl */ `
   uniform sampler2D uDust;
   uniform vec2 uSize; // drawing-buffer pixels of the target being composited into
   uniform vec2 uTexel; // one dust texel in uv
+  uniform float uFade; // 1 out among the arms, 0 once the camera is closer to the plane than it can impostor
   void main() {
     vec2 uv = gl_FragCoord.xy / uSize;
     #ifdef SOFT
@@ -255,7 +256,7 @@ const compositeFragment = /* glsl */ `
     #else
       vec4 d = texture2D(uDust, uv);
     #endif
-    gl_FragColor = vec4(d.rgb, d.a);
+    gl_FragColor = vec4(d.rgb, d.a) * uFade;
     #include <colorspace_fragment>
   }
 `;
@@ -265,6 +266,13 @@ export interface Dust {
   composite: THREE.Mesh;
   /** Render the disc into the dust target; call before rendering the tier's scene. */
   render(renderer: THREE.WebGLRenderer, camera: THREE.Camera): void;
+  /**
+   * Scale the composite, 1 by default. The field is a plane impostor evaluated in kpc: a camera
+   * standing off the disc reads it as dust, and a camera descending into the disc — which M4's
+   * dolly does, to arrive at a place — eventually stands inside the texel it is looking at, and
+   * reads it as a white wall. Fade it out before that, and let the star field carry the band.
+   */
+  fade(k: number): void;
   resize(width: number, height: number): void; // CSS pixels
   /** Dust target size in pixels, for reporting. */
   size: THREE.Vector2;
@@ -297,7 +305,7 @@ export function createDust(model: GalaxyModel, look: number, gain: number, scale
 
   const triangle = new THREE.BufferGeometry();
   triangle.setAttribute('position', new THREE.Float32BufferAttribute([-1, -1, 0, 3, -1, 0, -1, 3, 0], 3));
-  const compositeUniforms = { uDust: { value: target.texture }, uSize: { value: new THREE.Vector2(1, 1) }, uTexel: { value: new THREE.Vector2(1, 1) } };
+  const compositeUniforms = { uDust: { value: target.texture }, uSize: { value: new THREE.Vector2(1, 1) }, uTexel: { value: new THREE.Vector2(1, 1) }, uFade: { value: 1 } };
   const compositeMaterial = new THREE.ShaderMaterial({
     vertexShader: compositeVertex, fragmentShader: compositeFragment, uniforms: compositeUniforms,
     defines: look > 0.5 ? { SOFT: '' } : {},
@@ -322,7 +330,12 @@ export function createDust(model: GalaxyModel, look: number, gain: number, scale
   return {
     composite,
     size: new THREE.Vector2(),
+    fade(k) {
+      compositeUniforms.uFade.value = k;
+      composite.visible = k > 0.001;
+    },
     render(renderer, camera) {
+      if (!composite.visible) return; // faded out: don't pay for the pass either
       camera.updateMatrixWorld();
       if (!dirty && view.equals(camera.matrixWorld) && projection.equals(camera.projectionMatrix) && rendered.equals(this.size)) return;
       if (dirty) renderer.domElement.addEventListener('webglcontextrestored', () => (dirty = true), { once: true });

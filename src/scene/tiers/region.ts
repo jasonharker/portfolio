@@ -1,20 +1,29 @@
-// Region tier: about a tenth of the disc around any waypoint, as a PHANGS-JWST crop of one arm
-// segment. The backdrop is the same seeded galaxy the Galaxy tier draws (galaxy-model), so the local
-// arm segment and the core glow sit in their true directions, with young blue-white clusters along
-// the arms and the most luminous of their stars carrying JWST's spikes. The constellation lives at
-// its waypoint; the other places get a placeholder marker until M3 brings the Local tier.
+// Region tier: everything below the galaxy. About a tenth of the disc around any waypoint, as a
+// PHANGS-JWST crop of one arm segment, down to the destination objects themselves. The backdrop is
+// the same seeded galaxy the Galaxy tier draws (galaxy-model), so the local arm segment and the core
+// glow sit in their true directions, with young blue-white clusters along the arms and the most
+// luminous of their stars carrying JWST's spikes.
+//
+// M4: the places live here, not in a tier of their own. Each sits at its waypoint as a group scaled
+// so that the distance it asks to be read from is READ kpc, which buys the thing the site is for —
+// one space from the whole disc down to a ship's hull, so a flight is a move rather than a cut, and
+// the galaxy is still behind you when you arrive. A place's own units are untouched inside its
+// group; nothing about it is faked in screen space.
 //
 // Units are galaxy units (≈ kpc), so waypoint positions from topology.yaml are used directly, and
 // stars are sized in kpc: nearer ones read bigger and brighter.
 // Draw calls: dust into its target (1), then deep field, stars, dust composite, core glow, bright
-// stars, constellation links and stars, foreground stars, place markers (9).
+// stars, constellation links and stars, foreground stars (8), plus whatever the place being read adds.
 import * as THREE from 'three';
 import { createConstellation, type Constellation } from '../constellation';
 import { createDust, type Dust } from '../dust';
 import { DISC_RADIUS, galaxyModel, prng, SEED } from '../galaxy-model';
 import { additive, createSky, palette, SPIKES, vivid, type Sky } from '../jwst';
 import { createLabels, type Labels } from '../labels';
-import type { CameraPose, PlaceId, SceneContext, Tier, Waypoint } from '../types';
+import { createBlackHole } from '../local/blackhole';
+import { createOrrery } from '../local/orrery';
+import { createShip } from '../local/ship';
+import type { CameraPose, LocalPlace, PlaceId, SceneContext, Tier, Waypoint } from '../types';
 
 const DISTANCE = 2.2; // camera to the framed place; ~3.5 wide at 16:9, a tenth of the disc
 const CORE_DISTANCE = 4.5; // the core (documentation) is larger than a tenth; stand back to see the bulge
@@ -22,6 +31,12 @@ const ELEVATION = THREE.MathUtils.degToRad(24);
 const AZIMUTH = THREE.MathUtils.degToRad(46); // swings the view so the core falls toward an edge
 const FOV = 50;
 const CONSTELLATION_SCALE = 0.62; // galaxy units per constellation-local unit
+// The view distance a place is read from, in kpc, which is what sets its group's scale. Chosen, not
+// physical: honest metres would put 17 empty decades between the arm and the object, and a scale
+// nothing in frame can be measured against is no scale at all. What has to hold is that a place is
+// consistent inside itself, and that arriving at one still shows the galaxy it sits in.
+const READ = 0.03;
+const SHOW = 2.5; // kpc: beyond this a place's object is a speck, and is not drawn
 const LABEL_RANGE = 8; // labels show only when the constellation is near enough to read
 // CSS px from a star's projection that still hovers it. Wider since M3: the label is hidden until
 // the star is hovered, so the star itself is the whole target rather than a dot beside a name.
@@ -33,14 +48,20 @@ const SPIKE_SIZE = 0.08; // kpc across a bright star's sprite at full luminosity
 const starsVertex = /* glsl */ `
   attribute vec4 tint; // rgb, a = size in kpc
   uniform float uScale; // drawing-buffer pixels per unit at distance 1
+  uniform float uExposure;
   varying vec3 vColor;
   varying float vAlpha;
   void main() {
     vec4 mv = modelViewMatrix * vec4(position, 1.0);
     float px = tint.a * uScale / max(-mv.z, 1e-3);
-    gl_PointSize = clamp(px, 2.0, 64.0);
+    // A star is a point source: past the size at which it is resolved it stops growing rather than
+    // swelling into a disc. The cap closes with the exposure, because the two views want different
+    // things from the same field — from 2 kpc out the near stars are the subject and carry the arm's
+    // texture, and from inside the disc they are a band, which is thousands of points and not
+    // hundreds of bokeh discs.
+    gl_PointSize = clamp(px, 2.0, mix(3.5, 24.0, uExposure));
     vAlpha = min(1.0, px * px / 16.0); // below 4 px a star keeps its flux, fading rather than shimmering
-    vColor = tint.rgb;
+    vColor = tint.rgb * uExposure;
     gl_Position = projectionMatrix * mv;
   }
 `;
@@ -59,6 +80,7 @@ const starsFragment = /* glsl */ `
 const brightVertex = /* glsl */ `
   attribute vec4 tint; // rgb, luminosity 0..1
   uniform float uScale;
+  uniform float uExposure;
   varying vec3 vColor;
   varying float vGain;
   varying float vPx;
@@ -73,7 +95,7 @@ const brightVertex = /* glsl */ `
     vPx = px * 0.5;
     vReach = 0.45 + 0.55 * tint.a;
     vColor = tint.rgb;
-    vGain = smoothstep(12.0, 36.0, px) * (0.12 + 1.4 * tint.a) * clamp(px / 80.0, 0.6, 1.4);
+    vGain = smoothstep(12.0, 36.0, px) * (0.12 + 1.4 * tint.a) * clamp(px / 80.0, 0.6, 1.4) * uExposure;
     gl_Position = projectionMatrix * mv;
   }
 `;
@@ -115,31 +137,6 @@ const glowFragment = /* glsl */ `
   }
 `;
 
-// Placeholders, as the Galaxy tier marks places: an ink ring and dot with a dark keyline, so they read
-// over the bright arm.
-const markerVertex = /* glsl */ `
-  uniform float uSize;
-  void main() {
-    gl_PointSize = uSize;
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-  }
-`;
-const markerFragment = /* glsl */ `
-  uniform vec3 uColor;
-  uniform vec3 uGround;
-  uniform float uSize;
-  void main() {
-    float d = length(gl_PointCoord * 2.0 - 1.0);
-    float aa = 2.0 / uSize;
-    float ring = 1.0 - smoothstep(0.0, aa * 1.5, abs(d - 0.66) - aa * 1.5);
-    float core = 1.0 - smoothstep(0.14, 0.14 + aa * 2.0, d);
-    float mark = max(ring, core);
-    float keyline = max(1.0 - smoothstep(0.0, aa * 2.0, abs(d - 0.66) - aa * 5.0), 1.0 - smoothstep(0.22, 0.22 + aa * 3.0, d));
-    gl_FragColor = vec4(mix(uGround, uColor, mark), max(mark, keyline * 0.7));
-    #include <colorspace_fragment>
-  }
-`;
-
 let ctx: SceneContext;
 let scene: THREE.Scene;
 let constellation: Constellation;
@@ -148,6 +145,9 @@ let ground: THREE.Color;
 let dust: Dust;
 let sky: Sky;
 let observer: ResizeObserver;
+/** The destination objects, at their waypoints. `near` is the one the camera is close enough to read. */
+const places = {} as Record<Exclude<PlaceId, 'constellation'>, { place: LocalPlace; unit: number; at: THREE.Vector3 }>;
+let near: { place: LocalPlace; unit: number; at: THREE.Vector3 } | null = null;
 let visible = false;
 let width = innerWidth;
 let height = innerHeight;
@@ -155,9 +155,8 @@ let pointer = { x: NaN, y: NaN };
 let hot: string | null = null;
 let labelsOn = false;
 const disposables: { dispose(): void }[] = [];
-const starUniforms = { uScale: { value: 1 } };
+const starUniforms = { uScale: { value: 1 }, uExposure: { value: 1 } };
 const glowUniforms = { uSize: { value: 16 }, uColor: { value: new THREE.Color() }, uStrength: { value: 1 } };
-const markerUniforms = { uSize: { value: 30 }, uColor: { value: new THREE.Color() }, uGround: { value: new THREE.Color() } };
 const buffer = new THREE.Vector2();
 let plane: THREE.Plane;
 const ray = new THREE.Raycaster();
@@ -287,17 +286,23 @@ export const region: Tier = {
     labels.show(visible);
     track(labels);
 
-    // Placeholder markers for the places M3 makes Local.
-    const others = ctx.topology.waypoints.filter((w) => w.id !== 'constellation');
-    const markerGeometry = track(new THREE.BufferGeometry());
-    markerGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(others.flatMap((w) => w.pos)), 3));
-    markerUniforms.uSize.value = 30 * dpr;
-    markerUniforms.uColor.value = ctx.colour('--ink');
-    markerUniforms.uGround.value = ground;
-    const markerMaterial = track(new THREE.ShaderMaterial({
-      uniforms: markerUniforms, vertexShader: markerVertex, fragmentShader: markerFragment,
-      transparent: true, depthTest: false, depthWrite: false,
-    }));
+    // The destinations. Each is built in its own units and then scaled so the distance its pose()
+    // asks for is READ kpc; 16:9 is the reference, so the scale is a property of the place and not
+    // of the viewport. Nothing else about the object is touched.
+    const built = { incidents: createOrrery(ctx), gitops: createShip(ctx), documentation: createBlackHole(ctx) };
+    for (const [id, place] of Object.entries(built) as [keyof typeof built, LocalPlace][]) {
+      const p = place.pose(16 / 9);
+      // The tier has one lens (a flight that changed FOV mid-move would read as a zoom on top of the
+      // dolly), so a place composed for its own FOV keeps its composition through the tangent ratio.
+      const fit = Math.tan(THREE.MathUtils.degToRad(FOV / 2)) / Math.tan(THREE.MathUtils.degToRad(p.fov / 2));
+      const unit = (READ / new THREE.Vector3(...p.position).distanceTo(new THREE.Vector3(...p.target))) * fit;
+      const at = new THREE.Vector3(...waypoint(id).pos);
+      place.group.position.copy(at);
+      place.group.scale.setScalar(unit);
+      place.group.visible = false;
+      places[id] = { place, unit, at };
+      track(place);
+    }
 
     // The same kpc dust field as the Galaxy tier, seen close (look 1: absorbing lanes, HII), and the same sky.
     dust = track(createDust(model, 1, 1, ctx.quality.dustScale, 5));
@@ -307,7 +312,13 @@ export const region: Tier = {
     sky.gain(0.9, 1);
 
     scene.add(sky.group, points(starGeometry, starMaterial, 0), dust.composite, glow, points(brightGeometry, brightMaterial, 1.5),
-      constellation.group, points(markerGeometry, markerMaterial, 11));
+      constellation.group, ...Object.values(places).map((p) => p.place.group));
+    // Compile every place's materials now, while the groups are still in hand. Otherwise the first
+    // frame that shows one compiles its shaders mid-flight, which stalls the dolly — a visible hitch
+    // on an Intel UHD 620, and seconds under SwiftShader in the tests.
+    for (const p of Object.values(places)) p.place.group.visible = true;
+    ctx.renderer.compile(scene, ctx.camera);
+    for (const p of Object.values(places)) p.place.group.visible = false;
 
     // The label layer's box is the canvas's box (both fixed, inset 0), which excludes a scrollbar
     // that innerWidth includes; watch it directly.
@@ -320,6 +331,14 @@ export const region: Tier = {
   },
 
   frame(place) {
+    // A destination object frames itself, in its own units; the group's scale and position carry
+    // that out into galaxy space, which is the only space the camera ever works in.
+    const p = places[place as keyof typeof places];
+    if (p) {
+      const pose = p.place.pose(width / height);
+      const out = (v: CameraPose['position']) => new THREE.Vector3(...v).multiplyScalar(p.unit).add(p.at).toArray() as CameraPose['position'];
+      return { position: out(pose.position), target: out(pose.target), fov: FOV };
+    }
     const { target, position, right, up, back, distance: framed } = base(place);
     // Spec §6: the object sits right of centre beside the reading column. On a portrait
     // screen the column is a bottom sheet, so it sits high instead, pulled back to fit the width.
@@ -344,11 +363,14 @@ export const region: Tier = {
     sky.update(dt);
     // The camera may have moved under a still pointer: test against last frame's label positions.
     if (!Number.isNaN(pointer.x)) region.hover!(pointer.x, pointer.y);
-    return constellation.update(dt, hot);
+    // Idle life runs in the place being read, and only there: the other three are a galaxy away.
+    const moving = near?.place.update(dt) ?? false;
+    return constellation.update(dt, hot) || moving;
   },
 
   hover(x, y) {
     pointer = { x, y };
+    near?.place.hover?.(x, y);
     // Where the pointer meets the constellation's plane, for the stars to give way from.
     if (Number.isNaN(x)) constellation.probe(null);
     else {
@@ -363,23 +385,51 @@ export const region: Tier = {
     ctx.invalidate();
   },
 
-  hot: () => hot,
+  hot: () => near?.place.hot?.() ?? hot,
+
+  reading: () => (near ? (Object.keys(places) as (keyof typeof places)[]).find((id) => places[id] === near) ?? null : null),
+
+  href: () => near?.place.href?.() ?? null,
 
   render(renderer, camera) {
     const cam = camera as THREE.PerspectiveCamera;
-    if (cam.near !== 0.01 || cam.far !== 80) {
-      cam.near = 0.01;
-      cam.far = 80;
+    // Which place is close enough to read, and so to draw, update and hover. Nothing announces the
+    // switch: at SHOW an object is a speck, and it grows from there as the dolly comes in.
+    near = null;
+    for (const p of Object.values(places)) {
+      const d = cam.position.distanceTo(p.at);
+      p.place.group.visible = d < SHOW;
+      if (p.place.group.visible && (!near || d < cam.position.distanceTo(near.at))) near = p;
+    }
+    // Near and far follow the camera: one tier now spans the whole disc down to a hull, and no fixed
+    // pair holds both. Only a place's own geometry depth-tests — the backdrop is additive and
+    // depth-free — so the range only has to bracket whatever is being read.
+    const r = Math.max(near ? cam.position.distanceTo(near.at) : cam.position.length(), 1e-4);
+    const [n, f] = [r / 200, Math.max(r * 400, 3 * DISC_RADIUS)];
+    if (cam.near !== n || cam.far !== f) {
+      cam.near = n;
+      cam.far = f;
       cam.updateProjectionMatrix();
     }
     cam.updateMatrixWorld();
+    near?.place.prepare?.(renderer, cam);
     renderer.getDrawingBufferSize(buffer);
     starUniforms.uScale.value = buffer.y / (2 * Math.tan(THREE.MathUtils.degToRad(cam.fov) / 2));
+    // Exposure. Coming in to a place the camera ends up inside the disc, looking along it, and the
+    // sightline stacks the whole arm: an additive field that reads as dust and stars from 2 kpc out
+    // saturates to white from within it. A camera exposing for a lit object a stone's throw away
+    // cannot also expose for the galaxy behind it, so stop down as the dolly comes in — which is
+    // also what leaves the band readable behind the object rather than blowing through it.
+    const exposure = 0.2 + 0.8 * THREE.MathUtils.smoothstep(r, 0.06, 1.4);
+    starUniforms.uExposure.value = exposure;
+    sky.gain(0.9 * exposure, exposure);
     // Inside the bulge the stars are the core; the glow is for seeing it from the arms.
-    glowUniforms.uStrength.value = THREE.MathUtils.smoothstep(cam.position.length(), 1.5, 7);
+    glowUniforms.uStrength.value = THREE.MathUtils.smoothstep(cam.position.length(), 1.5, 7) * exposure;
     renderer.setClearColor(ground, 1);
     const far = cam.position.distanceTo(constellation.centre);
     constellation.fade(far);
+    // Coming in to a place the camera descends into the disc, where the dust impostor breaks down.
+    dust.fade(THREE.MathUtils.smoothstep(r, 0.2, 1.2));
     dust.render(renderer, cam);
     renderer.render(scene, cam);
     labelsOn = visible && far < LABEL_RANGE;

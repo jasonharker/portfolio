@@ -26,8 +26,8 @@
 // rays wind repeatedly and cross the bright inner disk again and again. None of the three is drawn.
 import * as THREE from 'three';
 import { palette } from '../jwst';
-import type { LocalPlace } from '../tiers/local';
-import type { CameraPose, SceneContext } from '../types';
+
+import type { CameraPose, LocalPlace, SceneContext } from '../types';
 
 // The place's unit is the Schwarzschild radius, so every constant below is the textbook one: the
 // shadow is √27/2 across, the disk starts at the innermost stable orbit, 3.
