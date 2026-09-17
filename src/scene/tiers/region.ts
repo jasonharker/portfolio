@@ -23,7 +23,9 @@ const AZIMUTH = THREE.MathUtils.degToRad(46); // swings the view so the core fal
 const FOV = 50;
 const CONSTELLATION_SCALE = 0.62; // galaxy units per constellation-local unit
 const LABEL_RANGE = 8; // labels show only when the constellation is near enough to read
-const HOVER_PX = 24; // CSS px from a star's projection that still hovers it
+// CSS px from a star's projection that still hovers it. Wider since M3: the label is hidden until
+// the star is hovered, so the star itself is the whole target rather than a dot beside a name.
+const HOVER_PX = 32;
 const STAR_SIZE = 0.012; // kpc per unit of star luminosity; the Galaxy tier's 60k stars use 0.05, these are resolved
 const CLUSTER_RADIUS = [0.012, 0.05]; // kpc
 const SPIKE_SIZE = 0.08; // kpc across a bright star's sprite at full luminosity

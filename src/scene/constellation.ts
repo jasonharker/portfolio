@@ -255,7 +255,9 @@ export function createConstellation(ctx: SceneContext, centre: THREE.Vector3, sc
   const starAttribute = starGeometry.getAttribute('position') as THREE.BufferAttribute;
   const toLocal = new THREE.Matrix4();
   const at = new THREE.Vector3();
-  let probed: THREE.Vector3 | null = null;
+  // Copied, never aliased: the tier hands us a scratch vector it reuses every frame.
+  const probe = new THREE.Vector3();
+  let probing = false;
   let settled = true; // every star is at rest and nothing needs a frame
   let breath = 0; // seconds, only advanced on rendered frames
 
@@ -285,8 +287,16 @@ export function createConstellation(ctx: SceneContext, centre: THREE.Vector3, sc
       lineMaterial.opacity = THREE.MathUtils.clamp(viewDistance / cameraDistance, 0.15, 1);
     },
     probe(point) {
-      probed = point;
-      if (point) settled = false; // a moving pointer needs frames even when every star is home
+      // Only a *changed* pointer needs frames. A pointer resting over the scene with every star
+      // home is as idle as no pointer at all, and must not hold the loop awake.
+      if (!point) {
+        if (probing) settled = false;
+        probing = false;
+        return;
+      }
+      if (!probing || !probe.equals(point)) settled = false;
+      probing = true;
+      probe.copy(point);
     },
     update(dt, hot) {
       // Under reduced motion there are no ambient frames; the twinkle holds still rather than jump.
@@ -309,12 +319,12 @@ export function createConstellation(ctx: SceneContext, centre: THREE.Vector3, sc
       // Stars give way, then spring home. Skipped entirely once everything is at rest, so an idle
       // constellation costs nothing beyond the breath above.
       if (!ctx.quality.reducedMotion && !settled) {
-        if (probed) at.copy(probed).applyMatrix4(toLocal.copy(group.matrix).invert());
+        if (probing) at.copy(probe).applyMatrix4(toLocal.copy(group.matrix).invert());
         let moving = false;
         for (let i = 0; i < n; i++) {
           const o = i * 3;
           let [fx, fy, fz] = [0, 0, 0];
-          if (probed) {
+          if (probing) {
             const dx = positions[o] - at.x, dy = positions[o + 1] - at.y, dz = positions[o + 2] - at.z;
             const d = Math.hypot(dx, dy, dz);
             if (d < PUSH_R) {
@@ -334,7 +344,7 @@ export function createConstellation(ctx: SceneContext, centre: THREE.Vector3, sc
         }
         starAttribute.needsUpdate = true;
         restring();
-        settled = !moving && !probed;
+        settled = !moving;
         if (moving) easing = true;
       }
       return easing;

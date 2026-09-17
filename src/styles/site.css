@@ -127,6 +127,9 @@ article > section h2 { font-size: var(--step-0); }
 /* Wide screens: the masthead becomes a rail down the left and the column slides over it. Narrow
    screens keep the bottom sheet below, which the render loop's covered() measures — don't move it. */
 @media (min-width: 48.0625rem) {
+  /* Rail, column and scene are all fixed, which leaves the body with no in-flow content and so no
+     height at all — nothing can be tapped or scrolled against it. */
+  body { min-height: 100svh; }
   .masthead {
     position: fixed;
     inset: 0 auto 0 0;
@@ -169,7 +172,11 @@ article > section h2 { font-size: var(--step-0); }
   .column {
     margin: 60svh 0 0;
     max-width: none;
-    min-height: 40svh;
+    /* Opens at ~40% and drags to full (spec §6) — which needs a full viewport of sheet below the
+       fold to drag against. The landing page used to get that from the host list it printed; now
+       that the constellation is the only presentation of the topology, the sheet supplies its own,
+       or short pages cannot be dragged up over the scene at all. */
+    min-height: 100svh;
     background: var(--ground);
     border-top: 1px solid var(--rule);
   }
