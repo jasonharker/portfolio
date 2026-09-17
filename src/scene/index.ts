@@ -9,7 +9,6 @@ import { quality } from './quality';
 import { createStill } from './reduced-motion';
 import { placeFor } from './routes';
 import { galaxy } from './tiers/galaxy';
-import { local } from './tiers/local';
 import { region } from './tiers/region';
 import type { CameraPose, Scene, SceneContext, SceneDebug, Tier, TierId } from './types';
 
@@ -36,7 +35,7 @@ export function start(canvas: HTMLCanvasElement, gl: WebGL2RenderingContext, lab
     invalidate: () => loop.invalidate(),
   };
 
-  const tiers: Record<TierId, Tier> = { galaxy, region, local };
+  const tiers: Record<TierId, Tier> = { galaxy, region };
   const loading = new Map<TierId, Promise<Tier>>();
   let active: Tier | null = null;
   let pose: CameraPose = { position: [0, 0, 1], target: [0, 0, 0], fov: 50 };
@@ -112,6 +111,7 @@ export function start(canvas: HTMLCanvasElement, gl: WebGL2RenderingContext, lab
     get idle() { return loop.idle; },
     get rate() { return loop.rate; },
     get hot() { return active?.hot?.() ?? null; },
+    get reading() { return active?.reading?.() ?? null; },
     get tier() { return active?.id ?? null; },
     get paused() { return loop.paused; },
     get parallax() { return Math.hypot(at[0], at[1]); },

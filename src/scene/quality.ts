@@ -18,7 +18,6 @@ export const quality: Quality = small
       foreground: 24,
       brightStars: 600,
       dustScale: 0.4,
-      lensScale: 0.35,
       // Bloom is a chain of full-screen passes; on a phone GPU the emissive materials carry the
       // glow on their own well enough to be worth the trade.
       bloom: false,
@@ -32,7 +31,6 @@ export const quality: Quality = small
       foreground: 40,
       brightStars: 1200,
       dustScale: 0.5,
-      lensScale: 0.5,
       bloom: true,
       reducedMotion: matchMedia('(prefers-reduced-motion: reduce)').matches,
     };

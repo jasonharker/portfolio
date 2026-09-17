@@ -11,9 +11,9 @@
 // second, and the glows into one additive billboard pass; the build cycle is uniform writes only.
 import * as THREE from 'three';
 import { additive, vivid } from '../jwst';
-import type { LocalPlace } from '../tiers/local';
+
 import { coreDirection } from './core';
-import type { CameraPose, SceneContext, Vec3 } from '../types';
+import type { CameraPose, LocalPlace, SceneContext, Vec3 } from '../types';
 
 const BAYS = 4;
 const BAY_Z = [2.9, 1.15, -0.6, -2.35]; // down the spine, bow to stern
@@ -135,7 +135,9 @@ const glowVertex = /* glsl */ `
   void main() {
     int i = int(shade);
     vec4 mv = modelViewMatrix * vec4(i == ${BEAD} ? uBead : position, 1.0);
-    mv.xy += quad.xy * quad.z;
+    // The half-size is added in view space, where the group's scale doesn't reach; carry it across
+    // from the model matrix (the tier scales a place's group into galaxy units, tiers/region.ts).
+    mv.xy += quad.xy * quad.z * length(modelMatrix[0].xyz);
     vUv = quad.xy * 2.0;
     vColor = uTint[i] * uLevel[i];
     gl_Position = projectionMatrix * mv;

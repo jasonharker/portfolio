@@ -1,4 +1,4 @@
-"""Look-dev screenshots of dist/. usage: SHOTS_DIR=<dir> ONLY=landing,gitops,galaxy,incidents,documentation,region,hover shots.py <prefix>"""
+"""Look-dev screenshots of dist/. usage: SHOTS_DIR=<dir> ONLY=landing,gitops,galaxy,incidents,documentation,resume,region,hover shots.py <prefix>"""
 import sys, time
 sys.path.insert(0, __import__('os').path.dirname(__file__))
 import scene as S
@@ -7,7 +7,7 @@ from playwright.sync_api import sync_playwright
 prefix = sys.argv[1]
 import os
 extra = True
-ONLY = os.environ.get('ONLY', 'landing,gitops,galaxy,incidents,documentation,region,hover').split(',')
+ONLY = os.environ.get('ONLY', 'landing,gitops,galaxy,incidents,documentation,resume,region,hover').split(',')
 OUT = os.environ.get('SHOTS_DIR', '.').rstrip('/') + '/'
 # Virtual clock: every rAF batch advances 50 ms, so flights are frame-stepped and reproducible.
 # window.__holdAfter = K holds all callbacks K frames after the first flying frame.
@@ -72,8 +72,9 @@ with sync_playwright() as p:
             print('saved galaxy-beat', flush=True)
         pg.close()
 
-    # The three Local places (M3). Each is its own scene in the one Local tier.
-    for name, path in (('incidents', '/incidents/'), ('documentation', '/documentation/')):
+    # The destination objects. M4: each is a group in the Region tier at its own waypoint, and
+    # resume is one of them rather than the exception that froze the camera where it stood.
+    for name, path in (('incidents', '/incidents/'), ('documentation', '/documentation/'), ('resume', '/resume/')):
         if name in ONLY:
             pg = page(path)
             still(pg, name)

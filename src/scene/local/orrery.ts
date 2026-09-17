@@ -15,9 +15,9 @@
 // instead of crowding its blue end.
 import * as THREE from 'three';
 import { additive, palette, SPIKES } from '../jwst';
-import type { LocalPlace } from '../tiers/local';
+
 import { coreDirection } from './core';
-import type { CameraPose, SceneContext } from '../types';
+import type { CameraPose, LocalPlace, SceneContext } from '../types';
 
 const R0 = 2.4; // innermost ring
 const GAP = 1.75; // ring spacing, widening outward
@@ -120,7 +120,8 @@ const sunVertex = /* glsl */ `
     vec4 mv = modelViewMatrix * vec4(position, 1.0);
     gl_Position = projectionMatrix * mv;
     // The disc is world scale; the PSF around it is the instrument's, held to a sane sprite.
-    vDisc = uRadius * projectionMatrix[1][1] * 0.5 * uHeight / max(-mv.z, 0.001);
+    // uRadius is in the place's own units; the group's scale reaches position but not a uniform.
+    vDisc = uRadius * length(modelMatrix[0].xyz) * projectionMatrix[1][1] * 0.5 * uHeight / max(-mv.z, 0.001);
     float px = clamp(vDisc * 7.0, 48.0, 720.0);
     gl_PointSize = px;
     vPx = px * 0.5;
