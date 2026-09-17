@@ -15,7 +15,8 @@
 // instead of crowding its blue end.
 import * as THREE from 'three';
 import { additive, palette, SPIKES } from '../jwst';
-import { coreDirection, type LocalPlace } from '../tiers/local';
+import type { LocalPlace } from '../tiers/local';
+import { coreDirection } from './core';
 import type { CameraPose, SceneContext } from '../types';
 
 const R0 = 2.4; // innermost ring

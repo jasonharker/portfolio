@@ -11,7 +11,8 @@
 // second, and the glows into one additive billboard pass; the build cycle is uniform writes only.
 import * as THREE from 'three';
 import { additive, vivid } from '../jwst';
-import { coreDirection, type LocalPlace } from '../tiers/local';
+import type { LocalPlace } from '../tiers/local';
+import { coreDirection } from './core';
 import type { CameraPose, SceneContext, Vec3 } from '../types';
 
 const BAYS = 4;

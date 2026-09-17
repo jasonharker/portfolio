@@ -12,6 +12,7 @@
 import * as THREE from 'three';
 import { additive, createSky, type Sky } from '../jwst';
 import { createBlackHole } from '../local/blackhole';
+import { coreDirection } from '../local/core';
 import { createOrrery } from '../local/orrery';
 import { createShip } from '../local/ship';
 import type { CameraPose, PlaceId, SceneContext, Tier } from '../types';
@@ -79,14 +80,6 @@ const coreUniforms = { uSize: { value: 120 }, uStrength: { value: 1 }, uColor: {
 function own<T extends { dispose(): void }>(x: T): T {
   disposables.push(x);
   return x;
-}
-
-/** Unit vector from a place toward the galactic core, which sits at the origin (topology.yaml). */
-export function coreDirection(c: SceneContext, id: PlaceId): THREE.Vector3 {
-  const w = c.topology.waypoints.find((p) => p.id === id)!;
-  const v = new THREE.Vector3(-w.pos[0], -w.pos[1], -w.pos[2]);
-  // At the core itself there is no direction to it; look along the disc instead.
-  return v.lengthSq() < 1e-6 ? new THREE.Vector3(0, 0, -1) : v.normalize();
 }
 
 /** The place a PlaceId reads in here. `constellation` never arrives (routes.ts sends it to Region). */
