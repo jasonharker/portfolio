@@ -18,7 +18,7 @@ const topologySchema = z
   .object({
     nodes: z.array(z.object({ id, role, layer: z.enum(['physical', 'proxmox', 'kubernetes', 'services']), pos: vec3.optional() }).strict()).min(1),
     links: z.array(z.object({ from: id, to: id }).strict()),
-    waypoints: z.array(z.object({ id: z.enum(['constellation', 'incidents', 'gitops', 'documentation']), pos: vec3, focus: z.array(id).optional() }).strict()),
+    waypoints: z.array(z.object({ id: z.enum(['constellation', 'incidents', 'gitops', 'documentation', 'resume']), pos: vec3, focus: z.array(id).optional() }).strict()),
   })
   .strict()
   .superRefine((t, ctx) => {
@@ -33,7 +33,7 @@ const topologySchema = z
     t.links.forEach((l, i) => (missing(l.from, `links[${i}].from`), missing(l.to, `links[${i}].to`)));
     t.waypoints.forEach((w) => w.focus?.forEach((f) => missing(f, `waypoint ${w.id} focus`)));
     const places = new Set(t.waypoints.map((w) => w.id));
-    if (places.size !== 4 || t.waypoints.length !== 4) ctx.addIssue({ code: 'custom', message: 'waypoints must list each place exactly once' });
+    if (places.size !== 5 || t.waypoints.length !== 5) ctx.addIssue({ code: 'custom', message: 'waypoints must list each place exactly once' });
   });
 
 const topologyFile = new URL('./data/topology.yaml', import.meta.url);

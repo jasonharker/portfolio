@@ -20,6 +20,7 @@ import { createDust, type Dust } from '../dust';
 import { DISC_RADIUS, galaxyModel, prng, SEED } from '../galaxy-model';
 import { additive, createSky, palette, SPIKES, vivid, type Sky } from '../jwst';
 import { createLabels, type Labels } from '../labels';
+import { createComet } from '../local/comet';
 import { createNebula } from '../local/nebula';
 import { createOrrery } from '../local/orrery';
 import { createShip } from '../local/ship';
@@ -296,7 +297,7 @@ export const region: Tier = {
     // The destinations. Each is built in its own units and then scaled so the distance its pose()
     // asks for is READ kpc; 16:9 is the reference, so the scale is a property of the place and not
     // of the viewport. Nothing else about the object is touched.
-    const built = { incidents: createOrrery(ctx), gitops: createShip(ctx), documentation: createNebula(ctx) };
+    const built = { incidents: createOrrery(ctx), gitops: createShip(ctx), documentation: createNebula(ctx), resume: createComet(ctx) };
     for (const [id, place] of Object.entries(built) as [keyof typeof built, LocalPlace][]) {
       const p = place.pose(16 / 9);
       // The tier has one lens (a flight that changed FOV mid-move would read as a zoom on top of the

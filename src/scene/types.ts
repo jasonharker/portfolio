@@ -1,7 +1,7 @@
 // Scene contracts (M2 handoff §4). After W0 merges, changes here go through the lead.
 import type * as THREE from 'three';
 
-export type PlaceId = 'constellation' | 'incidents' | 'gitops' | 'documentation';
+export type PlaceId = 'constellation' | 'incidents' | 'gitops' | 'documentation' | 'resume';
 // M4: two tiers, not three. Every place is read in Region, at its own scale but in one space, so
 // the only cut left in the site is Galaxy <-> Region, between two views of the same seeded galaxy.
 export type TierId = 'galaxy' | 'region';
@@ -114,7 +114,7 @@ export interface Stage {
 
 /** A flight director: flight.ts, or reduced-motion.ts under prefers-reduced-motion. */
 export interface Director {
-  to(place: PlaceId | 'resume', opts: { instant: boolean }): void; // mid-flight: retarget, don't queue
+  to(place: PlaceId, opts: { instant: boolean }): void; // mid-flight: retarget, don't queue
   skip(): void; // jump to the end of the current flight
   update(dt: number): boolean; // true = still flying
 }
@@ -133,7 +133,7 @@ export interface SceneDebug {
   frames: number;
   contextLost: number;
   path: string;
-  place: PlaceId | 'resume';
+  place: PlaceId;
   instantAt: string | null; // path of the deep link the scene opened at; cleared by the first flight
   flights: string[]; // every non-instant goTo, in order
   flying: boolean; // the director reported a flight in progress on the last frame

@@ -271,7 +271,10 @@ def main():
         # M3 read each place in a Local tier of its own and this asserted the tier. M4 has one tier
         # below the galaxy, so the invariant is the object rather than the tier: the flight ends
         # close enough to the destination that it, and nothing else, is the thing being read.
-        for path, place in (('/incidents/', 'incidents'), ('/gitops/', 'gitops'), ('/documentation/', 'documentation')):
+        # Resume is in this list because it is no longer the exception that froze the camera: it has
+        # a waypoint and an object like every other route, which is the whole point of the change.
+        for path, place in (('/incidents/', 'incidents'), ('/gitops/', 'gitops'), ('/documentation/', 'documentation'),
+                            ('/resume/', 'resume')):
             pg.click(f'.masthead a[href="{path}"]')
             wait(pg, f'__scene.path === {path!r}')
             settle(pg)

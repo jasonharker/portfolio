@@ -110,3 +110,4 @@ waypoints:
   - { id: incidents, pos: [-9.53, 0, 5.5], focus: [] }
   - { id: gitops, pos: [0, 0, -5.5], focus: [flux] }
   - { id: documentation, pos: [0, 0, 0] }
+  - { id: resume, pos: [5.5, 0, -8.5] }

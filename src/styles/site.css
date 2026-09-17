@@ -115,7 +115,6 @@ article > section h2 { font-size: var(--step-0); }
 [data-layer='services'] { --star: var(--layer-services); }
 
 /* Resume: a wider two-column grid, scene dimmed nearly to black. */
-.resume .scene { opacity: 0.12; }
 .resume .column { max-width: 64rem; }
 .cv { display: grid; grid-template-columns: 12rem 1fr; gap: var(--space-4) var(--space-5); }
 .cv > h2 { font-size: var(--step-0); color: var(--muted); font-weight: 400; }

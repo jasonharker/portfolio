@@ -24,9 +24,7 @@ export function createStill(stage: Stage): Director {
 
   return {
     to(place) {
-      // Resume is not a place: keep the current still. With nothing shown yet, show the constellation.
-      if (place !== 'resume') show(place);
-      else if (!stage.current().tier && !pending) show('constellation');
+      show(place);
     },
     skip() {},
     update: () => false,

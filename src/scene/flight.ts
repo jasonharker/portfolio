@@ -95,13 +95,6 @@ export function createFlight(stage: Stage): Director {
 
   return {
     to(place, { instant }) {
-      if (place === 'resume') {
-        // Not a place yet (M4 phase 2 gives it one): freeze wherever we are. With nothing shown, a
-        // pending request still lands.
-        if (stage.current().tier) return (gen++, (pending = false), stop());
-        if (!pending) when(() => land('constellation'));
-        return;
-      }
       if (!instant && flying && dest === place) return; // already flying there
       dest = place;
       when(() => (instant ? land(place) : plan(place)));
