@@ -1,5 +1,5 @@
 ---
-import { getEntry } from 'astro:content';
+import { getCollection, getEntry } from 'astro:content';
 import { ClientRouter } from 'astro:transitions';
 import '../styles/site.css';
 import '../styles/scene-labels.css';
@@ -22,10 +22,17 @@ const nav = [
 ];
 // A JSON data block is never executed, so script-src 'self' allows it. Escape '<' so no
 // value can close the tag.
-const topology = JSON.stringify((await getEntry('topology', 'thales'))!.data).replace(/</g, '\\u003c');
+const json = (v: unknown) => JSON.stringify(v).replace(/</g, '\\u003c');
+const topology = json((await getEntry('topology', 'thales'))!.data);
+// One planet per incident in the Local orrery, best first. Only what the scene draws: no prose.
+const incidents = json(
+  (await getCollection('incidents'))
+    .sort((a, b) => a.data.order - b.data.order)
+    .map((e) => ({ slug: e.id, label: e.data.label, order: e.data.order, focus: e.data.focus })),
+);
 ---
 <!doctype html>
-<html lang="en">
+<html lang="en" data-read={path === '/' ? undefined : ''}>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -40,6 +47,7 @@ const topology = JSON.stringify((await getEntry('topology', 'thales'))!.data).re
     <div class="scene" aria-hidden="true" transition:persist="scene"><canvas></canvas></div>
     <div class="scene-labels" transition:persist="scene-labels"></div>
     <script type="application/json" id="topology" is:inline set:html={topology} />
+    <script type="application/json" id="incidents" is:inline set:html={incidents} />
     <header class="masthead">
       <a class="wordmark" href="/" aria-current={path === '/' ? 'page' : undefined}>Jason Harker</a>
       <nav aria-label="Primary">
@@ -47,23 +55,29 @@ const topology = JSON.stringify((await getEntry('topology', 'thales'))!.data).re
           <a href={item.href} aria-current={path.startsWith(item.href) ? 'page' : undefined}>{item.label}</a>
         ))}
       </nav>
-      <button class="look" type="button" aria-pressed="false">Look around</button>
+      <button class="look" type="button" aria-expanded={String(path !== '/')} aria-controls="reading">{path === '/' ? 'Read' : 'Close'}</button>
     </header>
-    <main class="column">
+    <main class="column" id="reading">
       <slot />
     </main>
     <script>
       // Runs once; ClientRouter swaps the page around it. Listeners on swapped elements
       // rebind on astro:page-load, listeners on document bind once.
+      //
+      // The scene is the resting state (spec §6): the reading column slides over the rail when
+      // you ask for it. The landing page opens closed, because the constellation is the thing to
+      // look at; every other route opens open, because you navigated there to read.
       const set = (on: boolean) => {
-        document.documentElement.toggleAttribute('data-look', on);
+        document.documentElement.toggleAttribute('data-read', on);
         const button = document.querySelector<HTMLButtonElement>('.look')!;
-        button.setAttribute('aria-pressed', String(on));
-        button.textContent = on ? 'Back to reading' : 'Look around';
+        button.setAttribute('aria-expanded', String(on));
+        button.textContent = on ? 'Close' : 'Read';
       };
       document.addEventListener('astro:page-load', () => {
-        document.querySelector('.look')!.addEventListener('click', () => set(!document.documentElement.hasAttribute('data-look')));
+        set(location.pathname !== '/');
+        document.querySelector('.look')!.addEventListener('click', () => set(!document.documentElement.hasAttribute('data-read')));
       });
+      // Esc closes the column; the scene's own Esc skips a flight. Neither cancels the other.
       document.addEventListener('keydown', (e) => e.key === 'Escape' && set(false));
 
       // The scene, after first paint and only past the gates (spec §5). Never by device class.

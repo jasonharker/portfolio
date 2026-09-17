@@ -267,6 +267,20 @@ def main():
         fb, took = pg.evaluate('__scene.frames'), time.time() - t0
         check('idle life: ambient, at most 30 fps', 0 < fb - fa <= 30 * took + 3 and pg.evaluate("__scene.rate === 'ambient'"), f'frames {fa}->{fb} in {took:.1f}s')
 
+        # --- the Local tier (M3) ------------------------------------------------------------
+        # Every place except the constellation is read in the Local tier. Before M3 all four were
+        # framed by Region, so a wrong tier here is the regression that matters.
+        for path, place in (('/incidents/', 'incidents'), ('/gitops/', 'gitops'), ('/documentation/', 'documentation')):
+            pg.click(f'.masthead a[href="{path}"]')
+            wait(pg, f'__scene.path === {path!r}')
+            settle(pg)
+            st = pg.evaluate('({tier: __scene.tier, place: __scene.place})')
+            check(f'local: {path} is read in the Local tier', st == {'tier': 'local', 'place': place}, str(st))
+        pg.click('a.wordmark')
+        wait(pg, "__scene.path === '/'")
+        settle(pg)
+        check('local: the constellation stays in the Region tier', pg.evaluate("__scene.tier === 'region'"), str(pg.evaluate('__scene.tier')))
+
         # Flights, skip, retarget (W3). Baseline: a full flight between two non-landing places.
         pg.click('nav a[href="/gitops/"]')
         wait(pg, "__scene.path === '/gitops/'")
@@ -318,6 +332,9 @@ def main():
         st = dl.evaluate('({instantAt: __scene.instantAt, flights: __scene.flights.length, place: __scene.place})')
         check('deep link opens at destination, no flight',
               st == {'instantAt': '/incidents/lorem-ipsum-dolor/', 'flights': 0, 'place': 'incidents'} and not flew, str(st))
+        # The tier matters as much as the place: land() used to cut to Region whatever the
+        # destination, which would show an incident from a tenth of the disc away.
+        check('deep link lands in the destination tier, not Region', dl.evaluate("__scene.tier === 'local'"), dl.evaluate('__scene.tier'))
         drain_csp(dl, 'deeplink')
         dl.close()
 
@@ -343,6 +360,9 @@ def main():
         rm.wait_for_timeout(1000)
         rb = rm.evaluate('__scene.frames')
         check('reduced motion: no idle life, loop stops', ra == rb and rm.evaluate('__scene.idle'), f'frames {ra}->{rb}')
+        # createStill() had the same Region-only hardcode as land(): under reduced motion every
+        # place, Local ones included, was shown as a Region still.
+        check('reduced motion: a Local place stills in the Local tier', rm.evaluate("__scene.tier === 'local'"), str(rm.evaluate('__scene.tier')))
         rm.mouse.move(40, 40)
         rm.mouse.move(1200, 650, steps=8)
         rm.wait_for_timeout(1000)
@@ -431,7 +451,10 @@ def main():
         else:
             node = mo.evaluate("document.querySelector('.scene-label[data-node]')?.dataset.node")
             box = mo.locator(f'.scene-label[data-node="{node}"]').bounding_box()
-            mo.mouse.move(box['x'] + box['width'] / 2, box['y'] + box['height'] / 2, steps=4)
+            # Since M3 the label is hidden until its star is hovered, so the star is the target, not
+            # the label box. scene-labels.css sets the text 0.9rem right of the star, centred on it.
+            nudge = mo.evaluate("0.9 * parseFloat(getComputedStyle(document.documentElement).fontSize)")
+            mo.mouse.move(box['x'] - nudge, box['y'] + box['height'] / 2, steps=4)
             hot = wait(mo, f'__scene.hot === {node!r}', 15, fail=False)
             check('hover: a constellation label sets __scene.hot', hot, f"{node}: hot={mo.evaluate('__scene.hot')}")
         drain_csp(mo, 'motion')

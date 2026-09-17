@@ -18,7 +18,12 @@ const layers = [
   <div class="prose">
     <p>Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur.</p>
   </div>
-  <div class="layers">
+  {/*
+    The constellation is the presentation of the topology (spec §6): a list of the same hostnames
+    beside it made the stars decorative. This copy stays for assistive technology, because the scene
+    labels are aria-hidden and this is their text equivalent — see src/scene/labels.ts.
+  */}
+  <nav class="layers visually-hidden" aria-label="Hosts by layer">
     {layers.map((layer) => (
       <section data-layer={layer.id}>
         <h2>{layer.name}</h2>
@@ -29,6 +34,6 @@ const layers = [
         </ul>
       </section>
     ))}
-  </div>
+  </nav>
   <p class="dek">Topology as of {asOf}</p>
 </Base>

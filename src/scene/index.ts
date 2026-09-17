@@ -1,13 +1,15 @@
 // The 3D scene. Loaded by Base.astro with a dynamic import() after first paint, and only
 // once the gates there have passed, so everything three.js pulls in stays in this chunk.
+import { navigate } from 'astro:transitions/client';
 import * as THREE from 'three';
-import { topology } from './data';
+import { incidents, topology } from './data';
 import { createFlight } from './flight';
 import { createLoop } from './loop';
 import { quality } from './quality';
 import { createStill } from './reduced-motion';
 import { placeFor } from './routes';
 import { galaxy } from './tiers/galaxy';
+import { local } from './tiers/local';
 import { region } from './tiers/region';
 import type { CameraPose, Scene, SceneContext, SceneDebug, Tier, TierId } from './types';
 
@@ -29,12 +31,12 @@ export function start(canvas: HTMLCanvasElement, gl: WebGL2RenderingContext, lab
   const css = getComputedStyle(document.documentElement);
 
   const ctx: SceneContext = {
-    renderer, camera, topology, quality, labels,
+    renderer, camera, topology, incidents, quality, labels,
     colour: (token) => new THREE.Color(css.getPropertyValue(token).trim()),
     invalidate: () => loop.invalidate(),
   };
 
-  const tiers: Record<TierId, Tier> = { galaxy, region };
+  const tiers: Record<TierId, Tier> = { galaxy, region, local };
   const loading = new Map<TierId, Promise<Tier>>();
   let active: Tier | null = null;
   let pose: CameraPose = { position: [0, 0, 1], target: [0, 0, 0], fov: 50 };
@@ -110,6 +112,7 @@ export function start(canvas: HTMLCanvasElement, gl: WebGL2RenderingContext, lab
     get idle() { return loop.idle; },
     get rate() { return loop.rate; },
     get hot() { return active?.hot?.() ?? null; },
+    get tier() { return active?.id ?? null; },
     get paused() { return loop.paused; },
     get parallax() { return Math.hypot(at[0], at[1]); },
     get sway() { return swayed; },
@@ -186,6 +189,13 @@ export function start(canvas: HTMLCanvasElement, gl: WebGL2RenderingContext, lab
   // Every navigation, including the back button. A second click on the active nav link, or Esc, skips.
   document.addEventListener('astro:after-swap', () => scene.goTo(location.pathname));
   document.addEventListener('click', (e) => (e.target as Element).closest?.('.masthead a[aria-current="page"]') && scene.skip());
+  // Clicking what the scene says the pointer is over (a planet in the orrery). The canvas is
+  // aria-hidden, so this is a mouse shortcut for a link that also exists in the prose, never the
+  // only way to reach the page.
+  canvas.addEventListener('click', () => {
+    const href = active?.href?.();
+    if (href) navigate(href);
+  });
   document.addEventListener('keydown', (e) => e.key === 'Escape' && scene.skip());
 
   scene.goTo(location.pathname, { instant: true });

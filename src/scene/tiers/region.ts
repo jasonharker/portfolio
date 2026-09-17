@@ -12,7 +12,7 @@ import * as THREE from 'three';
 import { createConstellation, type Constellation } from '../constellation';
 import { createDust, type Dust } from '../dust';
 import { DISC_RADIUS, galaxyModel, prng, SEED } from '../galaxy-model';
-import { additive, createSky, SPIKES, vivid, type Sky } from '../jwst';
+import { additive, createSky, palette, SPIKES, vivid, type Sky } from '../jwst';
 import { createLabels, type Labels } from '../labels';
 import type { CameraPose, PlaceId, SceneContext, Tier, Waypoint } from '../types';
 
@@ -23,12 +23,12 @@ const AZIMUTH = THREE.MathUtils.degToRad(46); // swings the view so the core fal
 const FOV = 50;
 const CONSTELLATION_SCALE = 0.62; // galaxy units per constellation-local unit
 const LABEL_RANGE = 8; // labels show only when the constellation is near enough to read
-const HOVER_PX = 24; // CSS px from a star's projection that still hovers it
+// CSS px from a star's projection that still hovers it. Wider since M3: the label is hidden until
+// the star is hovered, so the star itself is the whole target rather than a dot beside a name.
+const HOVER_PX = 32;
 const STAR_SIZE = 0.012; // kpc per unit of star luminosity; the Galaxy tier's 60k stars use 0.05, these are resolved
 const CLUSTER_RADIUS = [0.012, 0.05]; // kpc
 const SPIKE_SIZE = 0.08; // kpc across a bright star's sprite at full luminosity
-/** Token kelvins in tokens.css; the values themselves are read from CSS. */
-const KELVINS = [3000, 4300, 5600, 6800, 8500, 12000, 30000];
 
 const starsVertex = /* glsl */ `
   attribute vec4 tint; // rgb, a = size in kpc
@@ -159,6 +159,10 @@ const starUniforms = { uScale: { value: 1 } };
 const glowUniforms = { uSize: { value: 16 }, uColor: { value: new THREE.Color() }, uStrength: { value: 1 } };
 const markerUniforms = { uSize: { value: 30 }, uColor: { value: new THREE.Color() }, uGround: { value: new THREE.Color() } };
 const buffer = new THREE.Vector2();
+let plane: THREE.Plane;
+const ray = new THREE.Raycaster();
+const ndc = new THREE.Vector2();
+const hit3 = new THREE.Vector3();
 
 function waypoint(place: PlaceId): Waypoint {
   return ctx.topology.waypoints.find((w) => w.id === place)!;
@@ -184,18 +188,6 @@ function base(place: PlaceId) {
   return { target, position, right, up, back, distance };
 }
 
-/** Colour for a temperature: log-interpolated between the blackbody tokens, chroma pushed (jwst.ts). */
-function palette() {
-  const stops = KELVINS.map((k) => ({ lk: Math.log(k), c: vivid(ctx.colour(`--star-${k}`), 2.4) }));
-  return (t: number, out: THREE.Color) => {
-    const lt = Math.log(t);
-    let i = 0;
-    while (i < stops.length - 2 && lt > stops[i + 1].lk) i++;
-    const f = THREE.MathUtils.clamp((lt - stops[i].lk) / (stops[i + 1].lk - stops[i].lk), 0, 1);
-    return out.lerpColors(stops[i].c, stops[i + 1].c, f);
-  };
-}
-
 function track<T extends { dispose(): void }>(d: T): T {
   disposables.push(d);
   return d;
@@ -216,7 +208,7 @@ export const region: Tier = {
     scene = new THREE.Scene();
     ground = ctx.colour('--ground');
     const dpr = ctx.quality.dpr;
-    const colourOf = palette();
+    const colourOf = palette(ctx.colour);
     const col = new THREE.Color();
 
     // Stars: the seeded galaxy (a superset of the Galaxy tier's), then young clusters along the arms.
@@ -286,6 +278,9 @@ export const region: Tier = {
     // The constellation faces the camera that frames it.
     const b = base('constellation');
     constellation = createConstellation(ctx, b.target, CONSTELLATION_SCALE, new THREE.Matrix4().makeBasis(b.right, b.up, b.back), DISTANCE * 1.3);
+    // The plane the stars lie in. The pointer is projected onto it so the repulsion happens in the
+    // constellation's own space rather than in screen space (spec §3).
+    plane = new THREE.Plane().setFromNormalAndCoplanarPoint(b.back.clone().normalize(), b.target);
     constellation.resize(dpr);
     track(constellation);
     labels = createLabels(ctx.labels, ctx.topology.nodes, constellation.world);
@@ -334,7 +329,9 @@ export const region: Tier = {
     position.addScaledVector(back, distance - framed);
     const half = distance * tan;
     const pan = aspect >= 1
-      ? right.multiplyScalar(-0.33 * half * aspect).addScaledVector(up, 0.08 * half)
+      // Right of centre, but only enough to clear the rail: the reading column is opened on demand
+      // over the scene now, not parked beside it (spec §6).
+      ? right.multiplyScalar(-0.14 * half * aspect).addScaledVector(up, 0.08 * half)
       : up.multiplyScalar(-0.4 * half);
     return {
       position: position.add(pan).toArray() as CameraPose['position'],
@@ -352,6 +349,13 @@ export const region: Tier = {
 
   hover(x, y) {
     pointer = { x, y };
+    // Where the pointer meets the constellation's plane, for the stars to give way from.
+    if (Number.isNaN(x)) constellation.probe(null);
+    else {
+      const w = ctx.labels.clientWidth || innerWidth, h = ctx.labels.clientHeight || innerHeight;
+      ray.setFromCamera(ndc.set((2 * x) / w - 1, 1 - (2 * y) / h), ctx.camera);
+      constellation.probe(ray.ray.intersectPlane(plane, hit3) ? hit3 : null);
+    }
     const next = Number.isNaN(x) || !labelsOn ? null : labels.hit(x, y, HOVER_PX);
     if (next === hot) return;
     hot = next;

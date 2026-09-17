@@ -6,19 +6,19 @@
 import * as THREE from 'three';
 import { createDust, type Dust } from '../dust';
 import { DISC_RADIUS, galaxyModel, SEED } from '../galaxy-model';
-import { additive, createSky, vivid, type Sky } from '../jwst';
+import { additive, createSky, palette, vivid, type Sky } from '../jwst';
 import { createBloom, type Bloom } from '../post/bloom';
 import type { CameraPose, PlaceId, SceneContext, Tier, Waypoint } from '../types';
 
 const ELEVATION = (35 * Math.PI) / 180; // camera height above the disc plane
 const FOV = 50;
 const PAN = 0.3; // how far toward a place the frame's centre moves, so pans between places read
-const OFFSET = 0.28; // on wide screens, where the frame's centre sits in ndc x
+// On wide screens the frame's centre sits a little right of centre in ndc x. It used to clear a
+// permanently open reading column; since M3 the column is opened on demand over a rail (spec §6),
+// so this only has to keep the composition off the rail, not off 38rem of prose.
+const OFFSET = 0.1;
 const NEAR = 0.5;
 const FAR = 300;
-/** Token kelvins in tokens.css; the values themselves are read from CSS. */
-const KELVINS = [3000, 4300, 5600, 6800, 8500, 12000, 30000];
-
 const outputChunks = /* glsl */ `
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
@@ -108,18 +108,6 @@ const starUniforms = { uScale: { value: 1 }, uGain: { value: 1 } };
 const markerUniforms = { uSize: { value: 18 }, uPx: { value: 18 }, uColor: { value: new THREE.Color() }, uGround: { value: new THREE.Color() } };
 const buffer = new THREE.Vector2();
 
-/** Colour for a temperature: log-interpolated between the blackbody tokens, chroma pushed (jwst.ts). */
-function palette(c: SceneContext) {
-  const stops = KELVINS.map((k) => ({ lk: Math.log(k), c: vivid(c.colour(`--star-${k}`), 2.4) }));
-  return (t: number, out: THREE.Color) => {
-    const lt = Math.log(t);
-    let i = 0;
-    while (i < stops.length - 2 && lt > stops[i + 1].lk) i++;
-    const f = THREE.MathUtils.clamp((lt - stops[i].lk) / (stops[i + 1].lk - stops[i].lk), 0, 1);
-    return out.lerpColors(stops[i].c, stops[i + 1].c, f);
-  };
-}
-
 function place(id: PlaceId): Waypoint {
   return ctx.topology.waypoints.find((w) => w.id === id)!;
 }
@@ -175,7 +163,7 @@ export const galaxy: Tier = {
     const model = galaxyModel(SEED, c.quality.stars, c.topology.waypoints);
     const n = model.temperatures.length;
     const tint = new Float32Array(n * 4);
-    const colourOf = palette(c);
+    const colourOf = palette(c.colour);
     const col = new THREE.Color();
     for (let i = 0; i < n; i++) {
       const t = model.temperatures[i];

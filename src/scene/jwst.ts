@@ -18,6 +18,21 @@ export function vivid(c: THREE.Color, amount: number): THREE.Color {
   return c.setRGB(...([c.r, c.g, c.b].map((v) => Math.max(0, l + (v - l) * amount)) as [number, number, number]));
 }
 
+/** Token kelvins in tokens.css; the values themselves are read from CSS. */
+export const KELVINS = [3000, 4300, 5600, 6800, 8500, 12000, 30000];
+
+/** Colour for a temperature: log-interpolated between the blackbody tokens, chroma pushed. */
+export function palette(colour: (token: string) => THREE.Color) {
+  const stops = KELVINS.map((k) => ({ lk: Math.log(k), c: vivid(colour(`--star-${k}`), 2.4) }));
+  return (t: number, out: THREE.Color) => {
+    const lt = Math.log(t);
+    let i = 0;
+    while (i < stops.length - 2 && lt > stops[i + 1].lk) i++;
+    const f = THREE.MathUtils.clamp((lt - stops[i].lk) / (stops[i + 1].lk - stops[i].lk), 0, 1);
+    return out.lerpColors(stops[i].c, stops[i + 1].c, f);
+  };
+}
+
 /** Screen-like blending: light accumulates but tops out, so dense regions don't run away into bloom. */
 export const additive = {
   blending: THREE.CustomBlending, blendSrc: THREE.OneFactor, blendDst: THREE.OneMinusSrcColorFactor,
