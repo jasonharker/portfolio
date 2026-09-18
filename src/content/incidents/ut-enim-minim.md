@@ -3,7 +3,7 @@ title: Ut enim ad minim veniam quis nostrud exercitation
 dek: Neque porro quisquam est qui dolorem ipsum quia dolor sit amet.
 label: Enim minim veniam
 order: 3
-focus: [vault]
+focus: [labore, dolore, magna]
 ---
 
 Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.

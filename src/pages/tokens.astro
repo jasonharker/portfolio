@@ -29,11 +29,8 @@ const avoid = [
   <ul class="swatches">
     {stars.map((t) => <li style={`--swatch: var(${t})`}><code>{t}</code></li>)}
   </ul>
-  <ul class="hosts">
-    <li data-layer="physical">Physical <span>3000 K</span></li>
-    <li data-layer="proxmox">Proxmox <span>4300 K</span></li>
-    <li data-layer="kubernetes">Kubernetes <span>5600 K</span></li>
-    <li data-layer="services">Services <span>12000 K</span></li>
+  <ul class="swatches">
+    {['--chapter-1', '--chapter-2', '--chapter-3', '--chapter-4'].map((t) => <li style={`--swatch: var(${t})`}><code>{t}</code></li>)}
   </ul>
 
   <h2>Type scale</h2>

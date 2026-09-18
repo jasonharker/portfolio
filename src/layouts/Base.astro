@@ -32,7 +32,7 @@ const incidents = json(
 );
 ---
 <!doctype html>
-<html lang="en" data-read={path === '/' ? undefined : ''}>
+<html lang="en" data-read="">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -55,7 +55,7 @@ const incidents = json(
           <a href={item.href} aria-current={path.startsWith(item.href) ? 'page' : undefined}>{item.label}</a>
         ))}
       </nav>
-      <button class="look" type="button" aria-expanded={String(path !== '/')} aria-controls="reading">{path === '/' ? 'Read' : 'Close'}</button>
+      <button class="look" type="button" aria-expanded="true" aria-controls="reading">Close</button>
     </header>
     <main class="column" id="reading">
       <slot />
@@ -64,9 +64,9 @@ const incidents = json(
       // Runs once; ClientRouter swaps the page around it. Listeners on swapped elements
       // rebind on astro:page-load, listeners on document bind once.
       //
-      // The scene is the resting state (spec §6): the reading column slides over the rail when
-      // you ask for it. The landing page opens closed, because the constellation is the thing to
-      // look at; every other route opens open, because you navigated there to read.
+      // The reading column slides over the rail. Every route opens open, the landing page included
+      // since M5: the essay is the subject there and the sky is its backdrop, so the words are what
+      // you land on. Closing it is how you look at the sky.
       const set = (on: boolean) => {
         document.documentElement.toggleAttribute('data-read', on);
         const button = document.querySelector<HTMLButtonElement>('.look')!;
@@ -74,7 +74,7 @@ const incidents = json(
         button.textContent = on ? 'Close' : 'Read';
       };
       document.addEventListener('astro:page-load', () => {
-        set(location.pathname !== '/');
+        set(true);
         document.querySelector('.look')!.addEventListener('click', () => set(!document.documentElement.hasAttribute('data-read')));
       });
       // Esc closes the column; the scene's own Esc skips a flight. Neither cancels the other.

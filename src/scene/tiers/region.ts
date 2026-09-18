@@ -19,7 +19,6 @@ import { createConstellation, type Constellation } from '../constellation';
 import { createDust, type Dust } from '../dust';
 import { DISC_RADIUS, galaxyModel, prng, SEED } from '../galaxy-model';
 import { additive, createSky, palette, SPIKES, vivid, type Sky } from '../jwst';
-import { createLabels, type Labels } from '../labels';
 import { createComet } from '../local/comet';
 import { createNebula } from '../local/nebula';
 import { createOrrery } from '../local/orrery';
@@ -31,17 +30,13 @@ const CORE_DISTANCE = 4.5; // the core (documentation) is larger than a tenth; s
 const ELEVATION = THREE.MathUtils.degToRad(24);
 const AZIMUTH = THREE.MathUtils.degToRad(46); // swings the view so the core falls toward an edge
 const FOV = 50;
-const CONSTELLATION_SCALE = 0.62; // galaxy units per constellation-local unit
+const CONSTELLATION_SCALE = 1.0; // galaxy units per constellation-local unit
 // The view distance a place is read from, in kpc, which is what sets its group's scale. Chosen, not
 // physical: honest metres would put 17 empty decades between the arm and the object, and a scale
 // nothing in frame can be measured against is no scale at all. What has to hold is that a place is
 // consistent inside itself, and that arriving at one still shows the galaxy it sits in.
 const READ = 0.03;
 const SHOW = 2.5; // kpc: beyond this a place's object is a speck, and is not drawn
-const LABEL_RANGE = 8; // labels show only when the constellation is near enough to read
-// CSS px from a star's projection that still hovers it. Wider since M3: the label is hidden until
-// the star is hovered, so the star itself is the whole target rather than a dot beside a name.
-const HOVER_PX = 32;
 const STAR_SIZE = 0.012; // kpc per unit of star luminosity; the Galaxy tier's 60k stars use 0.05, these are resolved
 const CLUSTER_RADIUS = [0.012, 0.05]; // kpc
 const SPIKE_SIZE = 0.08; // kpc across a bright star's sprite at full luminosity
@@ -141,7 +136,6 @@ const glowFragment = /* glsl */ `
 let ctx: SceneContext;
 let scene: THREE.Scene;
 let constellation: Constellation;
-let labels: Labels;
 let ground: THREE.Color;
 let dust: Dust;
 let sky: Sky;
@@ -149,12 +143,9 @@ let observer: ResizeObserver;
 /** The destination objects, at their waypoints. `near` is the one the camera is close enough to read. */
 const places = {} as Record<Exclude<PlaceId, 'constellation'>, { place: LocalPlace; unit: number; at: THREE.Vector3 }>;
 let near: { place: LocalPlace; unit: number; at: THREE.Vector3 } | null = null;
-let visible = false;
 let width = innerWidth;
 let height = innerHeight;
 let pointer = { x: NaN, y: NaN };
-let hot: string | null = null;
-let labelsOn = false;
 const disposables: { dispose(): void }[] = [];
 const starUniforms = { uScale: { value: 1 }, uExposure: { value: 1 } };
 const glowUniforms = { uSize: { value: 16 }, uColor: { value: new THREE.Color() }, uStrength: { value: 1 } };
@@ -281,7 +272,7 @@ export const region: Tier = {
     // instead of sitting in it. Swung off the view axis, its own depth does the rest.
     const b = base('constellation');
     const basis = new THREE.Matrix4().makeBasis(b.right, b.up, b.back)
-      .multiply(new THREE.Matrix4().makeRotationY(THREE.MathUtils.degToRad(24)))
+      .multiply(new THREE.Matrix4().makeRotationY(THREE.MathUtils.degToRad(15)))
       .multiply(new THREE.Matrix4().makeRotationX(THREE.MathUtils.degToRad(-9)));
     constellation = createConstellation(ctx, b.target, CONSTELLATION_SCALE, basis, DISTANCE * 1.3);
     // The plane the stars lie in — now the swung one. The pointer is projected onto it so the
@@ -290,9 +281,6 @@ export const region: Tier = {
     plane = new THREE.Plane().setFromNormalAndCoplanarPoint(normal, b.target);
     constellation.resize(dpr);
     track(constellation);
-    labels = createLabels(ctx.labels, ctx.topology.nodes, constellation.world);
-    labels.show(visible);
-    track(labels);
 
     // The destinations. Each is built in its own units and then scaled so the distance its pose()
     // asks for is READ kpc; 16:9 is the reference, so the scale is a property of the place and not
@@ -355,10 +343,12 @@ export const region: Tier = {
     const distance = aspect >= 1 ? framed : Math.max(framed, 1.1 / (tan * aspect));
     position.addScaledVector(back, distance - framed);
     const half = distance * tan;
+    // Right of centre. A place is read with the column opened on demand over the scene, so it needs
+    // only enough to clear the rail; the landing essay holds the column open the whole time it is
+    // read, so its sky is pushed clear of the text entirely.
+    const shift = place === 'constellation' ? 0.72 : 0.14;
     const pan = aspect >= 1
-      // Right of centre, but only enough to clear the rail: the reading column is opened on demand
-      // over the scene now, not parked beside it (spec §6).
-      ? right.multiplyScalar(-0.14 * half * aspect).addScaledVector(up, 0.08 * half)
+      ? right.multiplyScalar(-shift * half * aspect).addScaledVector(up, 0.08 * half)
       : up.multiplyScalar(-0.4 * half);
     return {
       position: position.add(pan).toArray() as CameraPose['position'],
@@ -373,7 +363,7 @@ export const region: Tier = {
     if (!Number.isNaN(pointer.x)) region.hover!(pointer.x, pointer.y);
     // Idle life runs in the place being read, and only there: the other three are a galaxy away.
     const moving = near?.place.update(dt) ?? false;
-    return constellation.update(dt, hot) || moving;
+    return constellation.update(dt) || moving;
   },
 
   hover(x, y) {
@@ -386,14 +376,11 @@ export const region: Tier = {
       ray.setFromCamera(ndc.set((2 * x) / w - 1, 1 - (2 * y) / h), ctx.camera);
       constellation.probe(ray.ray.intersectPlane(plane, hit3) ? hit3 : null);
     }
-    const next = Number.isNaN(x) || !labelsOn ? null : labels.hit(x, y, HOVER_PX);
-    if (next === hot) return;
-    hot = next;
-    labels.highlight(hot);
-    ctx.invalidate();
   },
 
-  hot: () => near?.place.hot?.() ?? hot,
+  hot: () => near?.place.hot?.() ?? null,
+
+  chapter: (id) => constellation?.chapter(id),
 
   reading: () => (near ? (Object.keys(places) as (keyof typeof places)[]).find((id) => places[id] === near) ?? null : null),
 
@@ -403,12 +390,16 @@ export const region: Tier = {
     const cam = camera as THREE.PerspectiveCamera;
     // Which place is close enough to read, and so to draw, update and hover. Nothing announces the
     // switch: at SHOW an object is a speck, and it grows from there as the dolly comes in.
+    const was = near;
     near = null;
     for (const p of Object.values(places)) {
       const d = cam.position.distanceTo(p.at);
       p.place.group.visible = d < SHOW;
       if (p.place.group.visible && (!near || d < cam.position.distanceTo(near.at))) near = p;
     }
+    // Flying away from a place ends whatever was hovered there: nothing else will call its update
+    // again, so a label left showing would hang over the next thing you arrived at.
+    if (was && was !== near) was.place.hover?.(NaN, NaN);
     // Near and far follow the camera: one tier now spans the whole disc down to a hull, and no fixed
     // pair holds both. Only a place's own geometry depth-tests — the backdrop is additive and
     // depth-free — so the range only has to bracket whatever is being read.
@@ -440,8 +431,6 @@ export const region: Tier = {
     dust.fade(THREE.MathUtils.smoothstep(r, 0.2, 1.2));
     dust.render(renderer, cam);
     renderer.render(scene, cam);
-    labelsOn = visible && far < LABEL_RANGE;
-    labels.update(cam, width, height, labelsOn);
   },
 
   resize(w, h) {
@@ -449,16 +438,6 @@ export const region: Tier = {
     height = ctx.labels.clientHeight || h;
     dust?.resize(w, h);
     for (const p of Object.values(places)) p.place.resize?.(width, height);
-  },
-
-  show(on) {
-    visible = on;
-    labels?.show(on);
-    if (on || !labels) return;
-    // Cut away: nothing is hovered, though the pointer is still where it was for the way back.
-    labelsOn = false;
-    hot = null;
-    labels.highlight(null);
   },
 
   dispose() {

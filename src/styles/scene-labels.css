@@ -1,9 +1,9 @@
-/* Constellation labels (src/scene/labels.ts). The .scene-labels layer is fixed over the canvas
-   with pointer-events off; each label turns them back on so its text can be selected or tapped.
-   Hover is the Region tier's own hit test (star or label box), marked with .hot.
-   labels.ts moves a label's origin onto its star with `transform`; `translate` sets the text
-   just right of the star, centred on it. */
-.constellation-labels { position: absolute; inset: 0; overflow: hidden; contain: strict; }
+/* Scene labels (src/scene/labels.ts) — since M5, the ship's pipeline stages. The .scene-labels
+   layer is fixed over the canvas with pointer-events off; each label turns them back on so its text
+   can be selected or tapped. Hover is the place's own hit test, marked with .hot.
+   labels.ts moves a label's origin onto its anchor with `transform`; `translate` sets the text
+   just right of the anchor, centred on it. */
+.scene-label-layer { position: absolute; inset: 0; overflow: hidden; contain: strict; }
 .scene-label {
   position: absolute;
   left: 0;
@@ -19,14 +19,11 @@
   will-change: transform;
 }
 .scene-label > span { display: block; }
-.scene-label > .role { font-size: 0.75rem; color: var(--muted); }
-.scene-label > .host, .scene-label > .role { transition: color 150ms; }
-.scene-label.hot > .host { color: var(--star); text-shadow: 0 0 2px var(--ground), 0 0 10px color-mix(in srgb, var(--star) 55%, transparent); }
-.scene-label.hot > .role { color: var(--ink); }
-.scene-label[data-layer='physical'] { --star: var(--layer-physical); }
-.scene-label[data-layer='proxmox'] { --star: var(--layer-proxmox); }
-.scene-label[data-layer='kubernetes'] { --star: var(--layer-kubernetes); }
-.scene-label[data-layer='services'] { --star: var(--layer-services); }
+.scene-label > .note { font-size: 0.75rem; color: var(--muted); }
+.scene-label > .name, .scene-label > .note { transition: color 150ms; }
+.scene-label.hot > .name { color: var(--star); text-shadow: 0 0 2px var(--ground), 0 0 10px color-mix(in srgb, var(--star) 55%, transparent); }
+.scene-label.hot > .note { color: var(--ink); }
+.scene-label { --star: var(--star-5600); }
 
 /* Resume dims the scene; the labels dim with it. */
 .resume .scene-labels { opacity: 0.12; }
@@ -35,7 +32,7 @@
   .scene-labels { display: none; }
 }
 
-/* Narrow screens: hostnames only. */
+/* Narrow screens: names only. */
 @media (max-width: 48rem) {
-  .scene-label > .role { display: none; }
+  .scene-label > .note { display: none; }
 }
