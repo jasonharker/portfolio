@@ -85,13 +85,22 @@ with sync_playwright() as p:
         still(pg, 'region-incidents')
         pg.close()
     if extra and 'hover' in ONLY:
-        pg = page('/')
-        el = pg.locator('.scene-label[data-node="flux"]')
-        box = el.bounding_box()
-        pg.mouse.move(box['x'] + 10, box['y'] + box['height'] / 2)
-        pg.wait_for_timeout(1500)
-        cx, cy = box['x'], box['y'] + box['height'] / 2
-        still(pg, 'hover', clip={'x': max(0, cx - 360), 'y': max(0, cy - 200), 'width': 720, 'height': 400})
+        # M5: the ship's modules are the only hoverable thing left. Sweep the hull until one of them
+        # answers, then shoot the label where it landed.
+        pg = page('/gitops/')
+        found = None
+        for x in range(1000, 1900, 20):
+            for y in range(400, 800, 20):
+                pg.mouse.move(x, y)
+                pg.wait_for_timeout(30)
+                if pg.evaluate('__scene.hot'):
+                    found = (x, y)
+                    break
+            if found:
+                break
+        assert found, 'nothing on the ship answered the pointer'
+        pg.wait_for_timeout(1200)
+        still(pg, 'hover', clip={'x': max(0, found[0] - 360), 'y': max(0, found[1] - 200), 'width': 720, 'height': 400})
         pg.close()
     br.close()
 srv.shutdown()

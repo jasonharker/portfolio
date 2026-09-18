@@ -27,12 +27,12 @@
   --star-4300: #e4bb9a;  /* K */
   --star-3000: #feb16d;  /* M */
 
-  /* Roles. Constellation layers use the same values as their stars. */
+  /* Roles. An essay chapter's asterism takes the same values as its stars, earliest warmest. */
   --link: var(--star-12000);
-  --layer-physical: var(--star-3000);
-  --layer-proxmox: var(--star-4300);
-  --layer-kubernetes: var(--star-5600);
-  --layer-services: var(--star-12000);
+  --chapter-1: var(--star-3000);
+  --chapter-2: var(--star-4300);
+  --chapter-3: var(--star-5600);
+  --chapter-4: var(--star-12000);
 
   /* Type. System fonts only: humanist sans for reading, mono only for real code. */
   --sans: Seravek, 'Gill Sans Nova', Ubuntu, Calibri, 'DejaVu Sans', source-sans-pro, sans-serif;

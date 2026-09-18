@@ -3,7 +3,7 @@ title: Duis aute irure dolor in reprehenderit
 dek: Quis autem vel eum iure reprehenderit qui in ea voluptate velit esse quam nihil molestiae consequatur.
 label: Aute irure
 order: 4
-focus: [timaeus, simmias]
+focus: [lorem, ipsum]
 ---
 
 Itaque earum rerum hic tenetur a sapiente delectus, ut aut reiciendis voluptatibus maiores alias consequatur aut perferendis doloribus asperiores repellat. Lorem ipsum dolor sit amet, consectetur adipiscing elit.

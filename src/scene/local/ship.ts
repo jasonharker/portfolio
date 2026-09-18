@@ -1,5 +1,14 @@
 // GitOps (/gitops): the ship, seen from alongside — the camera flies in formation, exterior, and
-// the pipeline stages are bays down the spine that light in sequence as a build passes (spec §3).
+// the pipeline stages are bays down the hull that light in sequence as a build passes (spec §3).
+//
+// M5: it was a trussed beam with boxes bolted to it, which is a rig, not a vessel. The spine is an
+// enclosed fuselage now — plated, ribbed, with a dorsal spine and a ventral keel — and the bays are
+// blisters on it rather than containers slung underneath. What reads as one ship is an unbroken
+// silhouette, so the structure that survives is the structure that hangs off the outside of it.
+//
+// Its six modules are the pipeline, and hovering one names it. The names are real, because the ship
+// is the only thing on the site that demonstrates delivery rather than describing it; the prose on
+// /gitops lists the same six, which is what makes hiding the labels from assistive technology free.
 //
 // One key light, and it is a real one: the galactic core, at the bearing coreDirection() gives for
 // this waypoint. The ship holds a heading a few degrees off that bearing, so the key rakes the
@@ -12,6 +21,7 @@
 import * as THREE from 'three';
 import { additive, vivid } from '../jwst';
 
+import { createLabels, type Labels } from '../labels';
 import { coreDirection } from './core';
 import type { CameraPose, LocalPlace, SceneContext, Vec3 } from '../types';
 
@@ -22,11 +32,26 @@ const RUN = 0.68; // the fraction of the cycle the build spends moving
 const FROM = 3.6, TO = -5.2; // where the build enters the spine and where it leaves it
 const LAMPS = 8; // the lamp ids: 0 to BAYS-1 are the bays, then
 const ENGINES = BAYS, BRIDGE = 5, BEACONS = 6, BEAD = 7;
+const HULL_R = 0.62; // the fuselage's radius: everything else hangs off this
+const HOVER_S = 0.18; // a module's lamp lifts and falls over this
+const HOVER_PX = 34; // CSS px from a module's projection that still hovers it
 const ATTITUDE: Vec3 = [0.22, -0.62, 0.03]; // heading, held a little off the core's bearing
 const EYE: Vec3 = [0.93, 0.31, 0.2]; // where the camera flies, in the ship's own frame
 const CENTRE: Vec3 = [0, -0.2, -0.2]; // what it holds in the middle of the frame
 const FOV = 45;
 const FRAMED = 19.5;
+
+/** The six modules you can hover, each named for the stage it is. `lamp` is the light it works by,
+ *  `at` where the label hangs, in the ship's own frame. The same six are listed in /gitops's prose,
+ *  which is the text equivalent of these labels — the canvas is aria-hidden. */
+const MODULES: { id: string; name: string; note: string; lamp: number; at: Vec3 }[] = [
+  { id: 'build', name: 'Build', note: 'Compile and unit test', lamp: 0, at: [HULL_R * 0.62 + 0.42, -0.12, BAY_Z[0]] },
+  { id: 'scan', name: 'Scan', note: 'Image and policy gate', lamp: 1, at: [HULL_R * 0.62 + 0.42, -0.12, BAY_Z[1]] },
+  { id: 'publish', name: 'Publish', note: 'Signed image to the registry', lamp: 2, at: [HULL_R * 0.62 + 0.42, -0.12, BAY_Z[2]] },
+  { id: 'deploy', name: 'Deploy', note: 'Reconciled onto the cluster', lamp: 3, at: [HULL_R * 0.62 + 0.42, -0.12, BAY_Z[3]] },
+  { id: 'control', name: 'Control', note: 'Where a release is approved', lamp: BRIDGE, at: [0.85, 0.42, 5.85] },
+  { id: 'promote', name: 'Promote', note: 'Progressive delivery to production', lamp: ENGINES, at: [0, 0, -6.4] },
+];
 
 // Lit only by the core, so the flanks are dark and the leading edges are not: what shapes the hull
 // is the falloff across a plate, the seams, and the lamps working on the spine. Seams and plate
@@ -72,13 +97,15 @@ const hullFragment = /* glsl */ `
     float seam = 1.0 - 0.24 * (1.0 - smoothstep(0.35, 1.1, min(g.x, g.y)));
     float plate = fract(sin(dot(floor(uv), vec2(41.3, 17.7))) * 4137.1);
     // Plates are not one grey and not one colour: a hull is patched, and the patches show.
-    vec3 albedo = uHull * vShade * seam * (0.88 + 0.2 * plate) * mix(vec3(1.0), vec3(1.08, 1.0, 0.9), plate);
+    vec3 albedo = uHull * vShade * seam * (0.78 + 0.42 * plate) * mix(vec3(1.0), vec3(1.12, 1.0, 0.86), plate);
 
     float key = dot(n, uKey);
-    vec3 lit = albedo * uKeyTint * max(key, 0.0) * 1.85;
+    vec3 lit = albedo * uKeyTint * pow(max(key, 0.0), 1.6) * 2.3;
     lit += albedo * uFill * (0.6 + 0.4 * n.y); // the disc behind, and nothing out here is pitch black
     vec3 h = normalize(uKey + v);
-    lit += uKeyTint * pow(max(dot(n, h), 0.0), 40.0) * 0.3 * step(0.0, key) * vShade;
+    // Tight, and not much of it: a flat plate holds a constant half-angle across its whole face, so
+    // a generous specular turns every panel into one sheet of gloss — which is what plastic is.
+    lit += uKeyTint * pow(max(dot(n, h), 0.0), 90.0) * 0.12 * step(0.0, key) * vShade;
 
     // The working lights. Four bays, the build between them, and the engines aft.
     for (int i = 0; i < 6; i++) {
@@ -195,6 +222,11 @@ export function createShip(ctx: SceneContext): LocalPlace {
   const tube = new THREE.CylinderGeometry(1, 1, 1, 12).rotateX(Math.PI / 2);
   const bell = new THREE.CylinderGeometry(0.45, 1, 1, 12).rotateX(Math.PI / 2);
   const cap = new THREE.CylinderGeometry(0.4, 1, 1, 4, 1, false, Math.PI / 4).rotateX(Math.PI / 2).scale(1.4142, 1.4142, 1);
+  // Flat-shaded, deliberately: a cylinder's averaged normals make a smooth tube, and a smooth tube
+  // under one key light is a single wash. Eight facets, each catching the core on its own terms, is
+  // what says plate.
+  const shell = new THREE.CylinderGeometry(1, 1, 1, 8).rotateX(Math.PI / 2).rotateZ(Math.PI / 8);
+  shell.computeVertexNormals(); // CylinderGeometry comes non-indexed, so this gives per-face normals
 
   const hull = parts(), lit = parts();
   const glow: { pos: number[]; quad: number[]; shade: number[] } = { pos: [], quad: [], shade: [] };
@@ -223,36 +255,34 @@ export function createShip(ctx: SceneContext): LocalPlace {
   lamp([0.85, 0.42, 5.85], 0.8, BRIDGE);
   lamp([0, 0.1, 7.05], 0.45, BEACONS);
 
-  // Spine: an open truss — four longerons, a ring frame every cell, braces alternating along it.
-  // Nothing is enclosed. It is a working vessel and the structure is most of what it is.
-  const SPAN: [number, number] = [-4.4, 3.5], R = 0.33, CELLS = 12;
-  const step = (SPAN[1] - SPAN[0]) / CELLS;
-  for (const x of [-R, R]) for (const y of [-R, R]) {
-    hull.add(box, [x, y, (SPAN[0] + SPAN[1]) / 2], [0.1, 0.1, SPAN[1] - SPAN[0]], 1);
+  // Fuselage: an enclosed hull the length of the ship, ribbed outside the plating, with a dorsal
+  // spine carrying the runs and a ventral keel to stand the bays off. Eight flats rather than a
+  // cylinder: a hull is built out of plate, and the facets are what catch the core one at a time.
+  const SPAN: [number, number] = [-4.4, 3.5];
+  const MID = (SPAN[0] + SPAN[1]) / 2, LEN = SPAN[1] - SPAN[0];
+  hull.add(shell, [0, 0, MID], [HULL_R, HULL_R, LEN], 1);
+  hull.add(shell, [0, 0, SPAN[1] + 0.12], [HULL_R * 0.92, HULL_R * 0.92, 0.36], 1.2);
+  hull.add(shell, [0, 0, SPAN[0] - 0.1], [HULL_R * 0.98, HULL_R * 0.98, 0.3], 1.2);
+  // Ribs, proud of the plating: they are what gives the flanks a rhythm under a raking key light.
+  for (let k = 1; k < 8; k++) {
+    hull.add(shell, [0, 0, SPAN[0] + (k * LEN) / 8], [HULL_R + 0.07, HULL_R + 0.07, 0.12], 1.15);
   }
-  const brace = Math.hypot(2 * R, step);
-  for (let k = 0; k <= CELLS; k++) {
-    const z = SPAN[0] + k * step;
-    for (const y of [-R, R]) hull.add(box, [0, y, z], [2 * R + 0.1, 0.09, 0.1], 1.1);
-    for (const x of [-R, R]) hull.add(box, [x, 0, z], [0.09, 2 * R - 0.09, 0.1], 1.1);
-    if (k === CELLS) break;
-    const sign = k % 2 ? 1 : -1;
-    hull.add(box, [0, R, z + step / 2], [0.06, 0.06, brace], 0.9, [0, sign * Math.atan2(2 * R, step), 0]);
-    hull.add(box, [R, 0, z + step / 2], [0.06, 0.06, brace], 0.9, [-sign * Math.atan2(2 * R, step), 0, 0]);
-  }
+  hull.add(box, [0, HULL_R + 0.12, MID], [0.46, 0.3, LEN * 0.92], 1.1);
+  hull.add(box, [0, HULL_R + 0.3, MID + 0.6], [0.2, 0.12, LEN * 0.5], 1.25);
+  hull.add(box, [0, -HULL_R - 0.1, MID], [0.78, 0.26, LEN * 0.88], 0.92);
+  for (const side of [-1, 1]) hull.add(box, [side * (HULL_R + 0.06), -0.18, MID], [0.14, 0.34, LEN * 0.8], 1.2);
 
-  // The bays: a yoke off the spine, a container slung in it, an arch over the top. The band round
-  // the container and the lamp under the arch are the stage — four of them, and a build runs the line.
+  // The bays: a blister on the starboard flank, where the camera flies, and a pod under the keel.
+  // The lit face of each is the stage, and a build runs the line from bow to stern.
   BAY_Z.forEach((z, i) => {
-    for (const dz of [-0.55, 0.55]) hull.add(box, [0, -0.66, z + dz], [1.36, 0.62, 0.16], 1.15);
-    hull.add(box, [0, -1.34, z], [1.5, 1.05, 1.4], 0.8);
-    for (const dz of [-0.62, 0.62]) hull.add(box, [0, -1.34, z + dz], [1.58, 1.12, 0.1], 1.1);
-    hull.add(box, [0, 0.58, z], [1.0, 0.16, 0.5], 1.15);
-    for (const x of [-0.42, 0.42]) hull.add(box, [x, 0.25, z], [0.14, 0.5, 0.42], 1.1);
-    lit.add(box, [0, -1.34, z], [1.56, 0.22, 1.0], i);
-    lit.add(box, [0, 0.47, z], [0.8, 0.05, 0.34], i);
-    lamp([0.9, -1.3, z], 1.0, i);
-    lamp([0, 0.42, z], 0.55, i);
+    hull.add(box, [HULL_R * 0.62, -0.12, z], [0.62, 0.9, 1.3], 0.86);
+    for (const dz of [-0.66, 0.66]) hull.add(box, [HULL_R * 0.62, -0.12, z + dz], [0.68, 0.96, 0.12], 1.1);
+    hull.add(box, [0, -HULL_R - 0.26, z], [0.86, 0.3, 1.12], 1.05);
+    hull.add(box, [0, HULL_R + 0.3, z], [0.34, 0.14, 0.7], 1.2);
+    lit.add(box, [HULL_R * 0.62 + 0.32, -0.12, z], [0.06, 0.52, 1.02], i);
+    lit.add(box, [0, -HULL_R - 0.42, z], [0.66, 0.05, 0.86], i);
+    lamp([HULL_R * 0.62 + 0.42, -0.12, z], 0.95, i);
+    lamp([0, -HULL_R - 0.46, z], 0.5, i);
   });
 
   // Radiators: two panels off the aft spine, angled up and outboard. The largest calm planes on the
@@ -279,7 +309,7 @@ export function createShip(ctx: SceneContext): LocalPlace {
   // The build itself: a bead running the spine, a core inside two widths of halo.
   for (const size of [0.3, 0.85, 2.0]) lamp([0, 0, 0], size, BEAD);
 
-  for (const g of [box, tube, bell, cap]) g.dispose();
+  for (const g of [box, tube, bell, cap, shell]) g.dispose();
 
   // A bay works in warm white, the engines burn orange, and the build itself is the coldest and
   // brightest thing aboard — the same blue-white the core is drawn in.
@@ -301,8 +331,10 @@ export function createShip(ctx: SceneContext): LocalPlace {
   const hullUniforms = {
     uKey: { value: new THREE.Vector3() },
     uKeyTint: { value: tint('--star-12000', 1.6, 1.15) },
-    uFill: { value: tint('--star-30000', 1.2, 0.08) },
-    uHull: { value: tint('--muted', 0.85, 0.62) },
+    uFill: { value: tint('--star-30000', 1.2, 0.05) },
+    // Dark grey, not white: an enclosed hull turns a lot of plate toward the key, and at the old
+    // albedo the whole flank blew out into one flat blue sheet. What shapes it is the falloff.
+    uHull: { value: tint('--muted', 0.55, 0.26) },
     uLamp: { value: lamps },
     uLampTint: { value: [...tints.slice(0, BAYS), tints[ENGINE], tints[BEAD]] },
   };
@@ -336,6 +368,36 @@ export function createShip(ctx: SceneContext): LocalPlace {
   const right = new THREE.Vector3().crossVectors(forward, new THREE.Vector3(0, 1, 0)).normalize();
   const up = new THREE.Vector3().crossVectors(right, forward);
   const centre = new THREE.Vector3().fromArray(CENTRE).applyEuler(group.rotation);
+
+  // Hover. A module is picked by projecting its anchor, nearest within HOVER_PX — the same test the
+  // orrery's planets use. What a hovered module does is burn brighter; the label does the naming.
+  const anchors = new Map(MODULES.map((m) => [m.id, new THREE.Vector3().fromArray(m.at)]));
+  const world = new THREE.Vector3();
+  const labels = createLabels(ctx.labels, MODULES, (id, out) => out.copy(anchors.get(id)!).applyMatrix4(group.matrixWorld));
+  const heat = new Array(LAMPS).fill(0);
+  const pointer = new THREE.Vector2(NaN, NaN);
+  let width = ctx.labels.clientWidth || innerWidth;
+  let height = ctx.labels.clientHeight || innerHeight;
+  let hot: string | null = null;
+
+  const pick = (x: number, y: number) => {
+    if (Number.isNaN(x) || !group.visible) return null;
+    let best: string | null = null;
+    let nearest = HOVER_PX * HOVER_PX;
+    for (const m of MODULES) {
+      world.copy(anchors.get(m.id)!).applyMatrix4(group.matrixWorld).project(ctx.camera);
+      if (world.z >= 1) continue;
+      const d = ((world.x + 1) * 0.5 * width - x) ** 2 + ((1 - world.y) * 0.5 * height - y) ** 2;
+      if (d <= nearest) (nearest = d), (best = m.id);
+    }
+    return best;
+  };
+  const look = (next: string | null) => {
+    if (next === hot) return;
+    hot = next;
+    labels.highlight(hot);
+    ctx.invalidate();
+  };
 
   let t = 0, life = 0;
   const position = new THREE.Vector3(), pan = new THREE.Vector3();
@@ -378,6 +440,22 @@ export function createShip(ctx: SceneContext): LocalPlace {
       lamps[ENGINE].w = level[ENGINES] * 0.7;
       lamps[TRAVEL].z = bead.z;
       lamps[TRAVEL].w = level[BEAD] * 1.3;
+
+      // The camera may have moved under a still pointer; the ship certainly has.
+      look(pick(pointer.x, pointer.y));
+      let easing = false;
+      for (const m of MODULES) {
+        const to = m.id === hot ? 1 : 0;
+        if (heat[m.lamp] === to) continue;
+        heat[m.lamp] = to > heat[m.lamp] ? Math.min(1, heat[m.lamp] + dt / HOVER_S) : Math.max(0, heat[m.lamp] - dt / HOVER_S);
+        easing = true;
+      }
+      // A hovered module works harder: its lamp burns up, and the hull around it lights with it.
+      for (const m of MODULES) {
+        level[m.lamp] += 0.85 * heat[m.lamp];
+        if (m.lamp < BAYS) lamps[m.lamp].w += 0.6 * heat[m.lamp];
+      }
+      labels.update(ctx.camera, width, height, group.visible);
       // Station-keeping: a degree of attitude, on periods long enough not to read as a wobble.
       group.rotation.set(
         ATTITUDE[0] + 0.011 * Math.sin(life * 0.17),
@@ -385,9 +463,22 @@ export function createShip(ctx: SceneContext): LocalPlace {
         ATTITUDE[2] + 0.008 * Math.sin(life * 0.13 + 2.2),
       );
       carry();
-      return false;
+      return easing;
+    },
+
+    hover(x, y) {
+      pointer.set(x, y);
+      look(pick(x, y));
+    },
+
+    hot: () => hot,
+
+    resize(w, h) {
+      width = ctx.labels.clientWidth || w;
+      height = ctx.labels.clientHeight || h;
     },
     dispose() {
+      labels.dispose();
       for (const k of kept.splice(0)) k.dispose();
       group.clear();
     },

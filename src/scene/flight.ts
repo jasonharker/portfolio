@@ -17,6 +17,8 @@ import type { CameraPose, Director, PlaceId, Stage, Tier, TierId, Vec3 } from '.
 const CROSSOVER = 8; // kpc: Galaxy above, Region below
 const DUR = 2.4; // seconds, place to place
 const NEAR_DUR = 0.6; // seconds for a reframe that never leaves the place
+const OPEN_DUR = 2.6; // seconds for the push-in the site opens with
+const OPEN_BACK = 3; // how far out that push-in starts, as a multiple of the reading distance
 const easeInOut = (k: number) => (k < 0.5 ? 4 * k * k * k : 1 - (-2 * k + 2) ** 3 / 2);
 const mix = (a: Vec3, b: Vec3, k: number) => a.map((v, i) => v + (b[i] - v) * k) as Vec3;
 const sub = (a: Vec3, b: Vec3) => a.map((v, i) => v - b[i]) as Vec3;
@@ -48,6 +50,7 @@ export function createFlight(stage: Stage): Director {
   // control point of the quadratic through them.
   let dir0: Vec3, dir1: Vec3, l0 = 0, l1 = 0, lc = 0;
   let dest: PlaceId | null = null;
+  let opened = false; // the push-in the site opens with has been spent
   let gen = 0; // bumps on every request, so a load that resolves late can't act on a stale one
   let pending = false;
 
@@ -66,6 +69,28 @@ export function createFlight(stage: Stage): Director {
     level(len(sub(pose.position, pose.target)));
     stage.pose(pose);
     dest = place;
+  };
+
+  // The site opens by pushing in, not by cutting to its mark: the camera starts three times the
+  // reading distance out along the same sightline and comes down the log ramp to it. It is the
+  // ordinary dolly with a synthesised start, so nothing here is a second kind of move — and it stays
+  // inside the Region tier (3 × 2.2 kpc is under CROSSOVER), so the open never swaps a tier.
+  //
+  // Only for the landing page. A deep link to a place is an arrival, and lands instantly.
+  const approach = (place: PlaceId) => {
+    to = frame(place);
+    const r = len(sub(to.position, to.target));
+    dir0 = dir1 = scale(sub(to.position, to.target), 1 / r);
+    from = { position: to.target.map((v, i) => v + dir0[i] * r * OPEN_BACK) as Vec3, target: to.target, fov: to.fov };
+    [l0, l1, lc] = [Math.log(r * OPEN_BACK), Math.log(r), Math.log(r * (OPEN_BACK + 1)) - Math.log(2)];
+    dest = place;
+    dur = OPEN_DUR;
+    t = 0;
+    flying = true;
+    // Put the camera at the far end before the first frame draws, or the open starts from wherever
+    // the default camera happened to be pointing.
+    level(r * OPEN_BACK);
+    stage.pose(from);
   };
 
   const plan = (place: PlaceId) => {
@@ -97,7 +122,9 @@ export function createFlight(stage: Stage): Director {
     to(place, { instant }) {
       if (!instant && flying && dest === place) return; // already flying there
       dest = place;
-      when(() => (instant ? land(place) : plan(place)));
+      const open = instant && !opened && place === 'constellation';
+      opened = true;
+      when(() => (instant ? (open ? approach(place) : land(place)) : plan(place)));
     },
     skip() {
       if (flying) land(dest!);
