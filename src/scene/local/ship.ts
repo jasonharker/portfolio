@@ -225,8 +225,8 @@ export function createShip(ctx: SceneContext): LocalPlace {
   // Flat-shaded, deliberately: a cylinder's averaged normals make a smooth tube, and a smooth tube
   // under one key light is a single wash. Eight facets, each catching the core on its own terms, is
   // what says plate.
-  const shell = new THREE.CylinderGeometry(1, 1, 1, 8).rotateX(Math.PI / 2).rotateZ(Math.PI / 8).toNonIndexed();
-  shell.computeVertexNormals();
+  const shell = new THREE.CylinderGeometry(1, 1, 1, 8).rotateX(Math.PI / 2).rotateZ(Math.PI / 8);
+  shell.computeVertexNormals(); // CylinderGeometry comes non-indexed, so this gives per-face normals
 
   const hull = parts(), lit = parts();
   const glow: { pos: number[]; quad: number[]; shade: number[] } = { pos: [], quad: [], shade: [] };

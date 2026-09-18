@@ -222,8 +222,11 @@ export function createConstellation(ctx: SceneContext, centre: THREE.Vector3, sc
   lines.frustumCulled = false;
   lines.renderOrder = 2;
 
-  // How lit each chapter is: 1 for the one being read, DIM for the rest, eased.
-  const heat = new Float32Array(chapters).fill(1);
+  // How lit each chapter is: 1 for the one being read, DIM for the rest, eased. A plain array, not
+  // a Float32Array: the ease stops when a value reaches its target exactly, and a Float32Array
+  // rounds the target on the way in — 0.26 stores as 0.2599999904632568, never equals the double it
+  // came from, and the whole scene eases at full rate for ever.
+  const heat = new Array<number>(chapters).fill(1);
   const paint = () => {
     edges.forEach((e, i) => {
       const k = e.travel

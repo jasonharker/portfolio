@@ -178,38 +178,31 @@ def scan_dist(dist):
     return hits
 
 
-# --- add-a-node -------------------------------------------------------------------------
+# --- add-a-chapter ----------------------------------------------------------------------
 
-PROBE = 'w4-probe'
+PROBE = 'probe-chapter'
 
 
-def build_with_extra_node(tmp):
+def build_with_extra_chapter(tmp):
     copy = Path(tmp) / 'repo'
     shutil.copytree(ROOT, copy, ignore=shutil.ignore_patterns('node_modules', 'dist', '.git', '.astro'))
     # A real copy: Astro resolves a symlinked node_modules to its real path and breaks.
     subprocess.run(['cp', '-a', str(ROOT / 'node_modules'), str(copy / 'node_modules')], check=True)
     topo = copy / 'src/data/topology.yaml'
     text = topo.read_text()
-    text, n = re.subn(r'^nodes:\n', f'nodes:\n  - {{ id: {PROBE}, role: Probe, layer: services }}\n', text, count=1, flags=re.M)
-    assert n == 1, 'no nodes: key in topology.yaml'
+    chapter = (f'chapters:\n  - id: {PROBE}\n    name: Probe chapter\n    at: [0.2, -0.2]\n'
+               '    stars: [[0, 0], [0.2, 0.1], [0.1, 0.24]]\n    lines: [[0, 1], [1, 2], [2, 0]]\n')
+    text, n = re.subn(r'^chapters:\n', chapter, text, count=1, flags=re.M)
+    assert n == 1, 'no chapters: key in topology.yaml'
     topo.write_text(text)
     subprocess.run([str(copy / 'node_modules/.bin/astro'), 'build'], cwd=copy, check=True, capture_output=True)
     return copy / 'dist'
 
 
-def labels(page):
-    return page.evaluate('''({labels: [...document.querySelectorAll('.scene-labels [data-node]')].map(e => e.dataset.node),
-                              nodes: JSON.parse(document.getElementById('topology').textContent).nodes.map(n => n.id)})''')
-
-
-def wait_labels(page, seconds=4.0):
-    end = time.time() + seconds
-    while time.time() < end:
-        got = labels(page)
-        if got['labels']:
-            return got
-        time.sleep(0.1)
-    return labels(page)
+def chapters(page):
+    """The essay's sections and the sky's chapters: the same list, or the page is lying."""
+    return page.evaluate('''({sections: [...document.querySelectorAll('[data-chapter]')].map(e => e.dataset.chapter),
+                              data: JSON.parse(document.getElementById('topology').textContent).chapters.map(c => c.id)})''')
 
 
 # --- run --------------------------------------------------------------------------------
@@ -234,7 +227,9 @@ def main():
         scene_up(pg)
         s0 = pg.evaluate('({webgl2: __scene.webgl2, instantAt: __scene.instantAt, flights: __scene.flights.length})')
         check('WebGL2 context created', s0['webgl2'] is True)
-        check('home load opens at its place, no flight', s0['instantAt'] == '/' and s0['flights'] == 0, str(s0))
+        # M5: the landing page pushes in rather than cutting to its mark. It is still an arrival —
+        # instantAt records it and nothing is pushed to flights — but the camera moves.
+        check('home load opens at its place, as an arrival', s0['instantAt'] == '/' and s0['flights'] == 0, str(s0))
         pg.evaluate('window.__docMarker = 1')
 
         def nav(click, path):
@@ -451,17 +446,9 @@ def main():
         check('hidden tab: ambient stops (emulated document.hidden)', stopped, detail)
         check('hidden tab: resumes when visible', resumed, detail)
 
-        if not mo.evaluate('__scene.hoverable'):
-            skip('hover: a constellation label sets __scene.hot', 'the active tier has no hot() yet')
-        else:
-            node = mo.evaluate("document.querySelector('.scene-label[data-node]')?.dataset.node")
-            box = mo.locator(f'.scene-label[data-node="{node}"]').bounding_box()
-            # Since M3 the label is hidden until its star is hovered, so the star is the target, not
-            # the label box. scene-labels.css sets the text 0.9rem right of the star, centred on it.
-            nudge = mo.evaluate("0.9 * parseFloat(getComputedStyle(document.documentElement).fontSize)")
-            mo.mouse.move(box['x'] - nudge, box['y'] + box['height'] / 2, steps=4)
-            hot = wait(mo, f'__scene.hot === {node!r}', 15, fail=False)
-            check('hover: a constellation label sets __scene.hot', hot, f"{node}: hot={mo.evaluate('__scene.hot')}")
+        # Nothing on the landing page answers the pointer since M5 — the sky is a backdrop, not a
+        # diagram — so the hover test moved to the ship, below.
+        check('hover: the landing page has no hoverable target', mo.evaluate('__scene.hot') is None, str(mo.evaluate('__scene.hot')))
         drain_csp(mo, 'motion')
         mo.close()
 
@@ -486,31 +473,76 @@ def main():
         drain_csp(tc, 'touch')
         tc_ctx.close()
 
-        # Labels (W2): one [data-node] per topology node, and a node added to the YAML gets one.
-        lb = watch(br.new_page(), 'labels')
+        # The essay and the sky are one list: a chapter with no section under it would light
+        # nothing, and a section with no chapter would scroll past an unchanging sky.
+        lb = watch(br.new_page(), 'chapters')
         lb.goto(B + '/')
         scene_up(lb)
-        got = wait_labels(lb)
-        drain_csp(lb, 'labels')
+        got = chapters(lb)
+        check('essay: one [data-chapter] section per chapter in the data',
+              got['sections'] == got['data'] and len(got['sections']) >= 2, str(got))
+
+        # Scrolling the essay lights the chapter under the reader's eye.
+        lit = []
+        for chapter in got['sections']:
+            lb.locator(f'[data-chapter="{chapter}"]').scroll_into_view_if_needed()
+            lb.wait_for_timeout(250)
+            lit.append(wait(lb, f'__scene.chapter === {chapter!r}', 6, fail=False))
+        check('essay: scrolling to a chapter lights its asterism', all(lit),
+              f"{sum(bool(x) for x in lit)}/{len(lit)}, last chapter={lb.evaluate('__scene.chapter')}")
+        drain_csp(lb, 'chapters')
         lb.close()
-        if not got['labels']:
-            skip('labels: one [data-node] per topology node', 'no [data-node] elements (W2 not merged)')
-            skip('add a node to topology.yaml: new labelled star, no code change', 'no [data-node] elements (W2 not merged)')
-        else:
-            check('labels: one [data-node] per topology node', sorted(got['labels']) == sorted(got['nodes']),
-                  f"{len(got['labels'])} labels, {len(got['nodes'])} nodes")
-            with tempfile.TemporaryDirectory(prefix='scene-add-node-') as tmp:
-                srv2, B2 = serve(build_with_extra_node(tmp))
-                an = watch(br.new_page(), 'add-node')
-                an.goto(B2 + '/')
-                scene_up(an)
-                got2 = wait_labels(an)
-                drain_csp(an, 'add-node')
-                an.close()
-                srv2.shutdown()
-            check('add a node to topology.yaml: new labelled star, no code change',
-                  PROBE in got2['nodes'] and PROBE in got2['labels'] and len(got2['labels']) == len(got2['nodes']) == len(got['nodes']) + 1,
-                  f"{len(got2['labels'])} labels, {len(got2['nodes'])} nodes")
+
+        with tempfile.TemporaryDirectory(prefix='scene-add-chapter-') as tmp:
+            srv2, B2 = serve(build_with_extra_chapter(tmp))
+            an = watch(br.new_page(), 'add-chapter')
+            an.goto(B2 + '/')
+            scene_up(an)
+            got2 = chapters(an)
+            drain_csp(an, 'add-chapter')
+            an.close()
+            srv2.shutdown()
+        check('add a chapter to topology.yaml: new section and asterism, no code change',
+              got2['sections'] == got2['data'] and PROBE in got2['sections'] and len(got2['sections']) == len(got['sections']) + 1,
+              f"{len(got2['sections'])} sections, {len(got2['data'])} chapters")
+
+        # Hover: the ship's modules are the only thing in the scene that answers the pointer now.
+        sh = watch(br.new_page(), 'ship')
+        sh.goto(B + '/gitops/')
+        scene_up(sh)
+        settle(sh)
+        box = sh.viewport_size
+        found = None
+        for x in range(int(box['width'] * 0.55), int(box['width'] * 0.95), 16):
+            for y in range(int(box['height'] * 0.3), int(box['height'] * 0.75), 16):
+                sh.mouse.move(x, y)
+                sh.wait_for_timeout(25)
+                if sh.evaluate('__scene.hot'):
+                    found = sh.evaluate('__scene.hot')
+                    break
+            if found:
+                break
+        shown = sh.evaluate("[...document.querySelectorAll('.scene-label')].filter(e => getComputedStyle(e).visibility !== 'hidden').map(e => e.dataset.node)")
+        check('hover: a ship module sets __scene.hot and shows its label alone',
+              found is not None and shown == [found], f'hot={found}, shown={shown}')
+        # The names in the scene and the names in the prose are the same six, or one of them exists
+        # only on a canvas that is aria-hidden.
+        stages = sh.evaluate("[...document.querySelectorAll('.stages li')].map(e => e.firstChild.textContent.trim())")
+        check('gitops: every stage the ship names is in the prose', len(stages) == 6 and found in [t.lower() for t in stages],
+              f'{stages}, hot={found}')
+        drain_csp(sh, 'ship')
+        sh.close()
+
+        # The comet is not a still life: its grains stream and its body drifts, on ambient frames.
+        cm = watch(br.new_page(), 'comet')
+        cm.goto(B + '/resume/')
+        scene_up(cm)
+        settle(cm)
+        first = cm.screenshot()
+        cm.wait_for_timeout(1500)
+        check('comet: the tail is moving', cm.screenshot() != first, 'two frames 1.5 s apart are identical')
+        drain_csp(cm, 'comet')
+        cm.close()
 
         drain_csp(pg, 'main')
         check('no CSP violations', not csp_hits, '; '.join(csp_hits[:5]))

@@ -37,10 +37,14 @@ export function createLabels(root: HTMLElement, items: Labelled[], anchor: (id: 
     note.className = 'note';
     note.textContent = item.note;
     el.append(name, note);
+    // Hidden until something hovers it. A label is created with the place, and a place is built
+    // long before it is ever looked at — left visible, all six sat in the top-left corner of every
+    // other page in the site until the ship's first frame moved them.
+    el.style.visibility = 'hidden';
     layer.append(el);
     // `on` = in frame, and so a candidate for the hit test. `shown` = actually drawn, which since
     // M3 means hovered. The two are separate: a star you can hover is not a label you can see.
-    return { id: item.id, el, x: NaN, y: NaN, on: true, shown: true };
+    return { id: item.id, el, x: NaN, y: NaN, on: true, shown: false };
   });
   root.append(layer);
 
@@ -96,9 +100,20 @@ export function createLabels(root: HTMLElement, items: Labelled[], anchor: (id: 
       return null;
     },
     highlight(id) {
-      hot?.el.classList.remove('hot');
+      // Visibility is settled here as well as in update(), because the last thing a place does
+      // before it is flown away from is drop its hover — and nothing will call update() again to
+      // hide the label, which would otherwise hang over whatever you arrived at next.
+      if (hot) {
+        hot.el.classList.remove('hot');
+        hot.shown = false;
+        hot.el.style.visibility = 'hidden';
+      }
       hot = entries.find((item) => item.id === id);
-      hot?.el.classList.add('hot');
+      if (!hot) return;
+      hot.el.classList.add('hot');
+      if (!hot.on) return;
+      hot.shown = true;
+      hot.el.style.visibility = '';
     },
     dispose() {
       layer.remove();
