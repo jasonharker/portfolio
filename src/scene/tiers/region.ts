@@ -390,12 +390,16 @@ export const region: Tier = {
     const cam = camera as THREE.PerspectiveCamera;
     // Which place is close enough to read, and so to draw, update and hover. Nothing announces the
     // switch: at SHOW an object is a speck, and it grows from there as the dolly comes in.
+    const was = near;
     near = null;
     for (const p of Object.values(places)) {
       const d = cam.position.distanceTo(p.at);
       p.place.group.visible = d < SHOW;
       if (p.place.group.visible && (!near || d < cam.position.distanceTo(near.at))) near = p;
     }
+    // Flying away from a place ends whatever was hovered there: nothing else will call its update
+    // again, so a label left showing would hang over the next thing you arrived at.
+    if (was && was !== near) was.place.hover?.(NaN, NaN);
     // Near and far follow the camera: one tier now spans the whole disc down to a hull, and no fixed
     // pair holds both. Only a place's own geometry depth-tests — the backdrop is additive and
     // depth-free — so the range only has to bracket whatever is being read.
