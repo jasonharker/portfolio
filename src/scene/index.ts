@@ -91,6 +91,8 @@ export function start(canvas: HTMLCanvasElement, gl: WebGL2RenderingContext, lab
       active?.show?.(false);
       active = tiers[id];
       active.show?.(true);
+      // A tier cut in after the essay has been scrolled still owes it the lit chapter.
+      active.chapter?.(debug.chapter);
     },
     current: () => ({ tier: active?.id ?? null, pose }),
     pose(p) {
@@ -111,6 +113,7 @@ export function start(canvas: HTMLCanvasElement, gl: WebGL2RenderingContext, lab
     get idle() { return loop.idle; },
     get rate() { return loop.rate; },
     get hot() { return active?.hot?.() ?? null; },
+    chapter: null,
     get reading() { return active?.reading?.() ?? null; },
     get tier() { return active?.id ?? null; },
     get paused() { return loop.paused; },
@@ -182,9 +185,35 @@ export function start(canvas: HTMLCanvasElement, gl: WebGL2RenderingContext, lab
       director.to(place, { instant });
       loop.invalidate();
     },
+    chapter(id) {
+      if (debug.chapter === id) return;
+      debug.chapter = id;
+      active?.chapter?.(id);
+      loop.invalidate();
+    },
     skip: () => (director.skip(), loop.invalidate()),
     invalidate: () => loop.invalidate(),
   };
+
+  // The landing essay drives the sky: whichever chapter is in view lights its asterism. One
+  // observer, rebound per navigation, and nothing at all on the other pages. It lives here because
+  // the CSP forbids inline script and this module is already the only one that runs.
+  const chapters = new IntersectionObserver(
+    (entries) => {
+      for (const e of entries) if (e.isIntersecting) scene.chapter((e.target as HTMLElement).dataset.chapter ?? null);
+    },
+    // A band across the middle of the viewport: the chapter being read is the one under the reader's
+    // eye, not the one that has just scrolled into the bottom of the window.
+    { rootMargin: '-45% 0px -45% 0px' },
+  );
+  const watch = () => {
+    chapters.disconnect();
+    const sections = document.querySelectorAll<HTMLElement>('[data-chapter]');
+    if (!sections.length) return scene.chapter(null);
+    for (const section of sections) chapters.observe(section);
+  };
+  watch();
+  document.addEventListener('astro:page-load', watch);
 
   // Every navigation, including the back button. A second click on the active nav link, or Esc, skips.
   document.addEventListener('astro:after-swap', () => scene.goTo(location.pathname));

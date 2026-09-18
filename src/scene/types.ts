@@ -6,12 +6,12 @@ export type PlaceId = 'constellation' | 'incidents' | 'gitops' | 'documentation'
 // the only cut left in the site is Galaxy <-> Region, between two views of the same seeded galaxy.
 export type TierId = 'galaxy' | 'region';
 export type Vec3 = [number, number, number];
-export type Layer = 'physical' | 'proxmox' | 'kubernetes' | 'services';
-
-export interface TopologyNode { id: string; role: string; layer: Layer; pos?: Vec3 }
-export interface Waypoint { id: PlaceId; pos: Vec3; focus?: string[] }
+/** A chapter of the landing essay, and the asterism that stands behind it. Stars are [x, y] in
+ * constellation-local units about `at`; `lines` are index pairs into `stars`. */
+export interface Chapter { id: string; name: string; at: [number, number]; stars: [number, number][]; lines: [number, number][] }
+export interface Waypoint { id: PlaceId; pos: Vec3 }
 /** Mirrors the validated schema in src/content.config.ts. Galaxy units ≈ kpc, disc in XZ, core at origin. */
-export interface Topology { nodes: TopologyNode[]; links: { from: string; to: string }[]; waypoints: Waypoint[] }
+export interface Topology { chapters: Chapter[]; waypoints: Waypoint[] }
 
 /** One incident, one planet in the Local orrery. Mirrors the collection schema in src/content.config.ts. */
 export interface Incident { slug: string; label: string; order: number; focus: string[] }
@@ -61,8 +61,9 @@ export interface Tier {
   update(dt: number): boolean;
   /** Mouse pointer in CSS pixels, NaN when it leaves. Not called for touch. Return nothing; call ctx.invalidate() to animate. */
   hover?(x: number, y: number): void;
-  hot?(): string | null; // id of the topology node under the pointer, or null (read into __scene.hot)
+  hot?(): string | null; // id of whatever the pointer is over (a ship module), or null (read into __scene.hot)
   reading?(): PlaceId | null; // the place close enough to be read, or null out among the arms
+  chapter?(id: string | null): void; // light the asterism of the essay chapter in view
   href?(): string | null; // the URL a click on the pointer's target would open, or null
   render(renderer: THREE.WebGLRenderer, camera: THREE.Camera): void;
   resize?(width: number, height: number): void; // CSS pixels; renderer is already resized
@@ -121,6 +122,8 @@ export interface Director {
 
 export interface Scene {
   goTo(path: string, opts?: { instant?: boolean }): void;
+  /** The landing essay's chapter in view; lights its asterism and dims the rest. */
+  chapter(id: string | null): void;
   skip(): void;
   invalidate(): void;
 }
@@ -139,7 +142,8 @@ export interface SceneDebug {
   flying: boolean; // the director reported a flight in progress on the last frame
   idle: boolean; // no frame is scheduled
   rate: 'full' | 'ambient' | 'idle'; // ambient: only the ≤30 fps idle animation is running
-  hot: string | null; // the constellation star under the pointer, or null
+  hot: string | null; // what the pointer is over in the scene (a ship module), or null
+  chapter: string | null; // the landing essay's chapter in view, which lights its asterism
   reading: PlaceId | null; // the place the camera is close enough to read; null while out among the arms
   tier: TierId | null; // the tier being rendered; null until the first cut
   paused: boolean;

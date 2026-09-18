@@ -3,7 +3,7 @@ title: Sed do eiusmod tempor incididunt
 dek: Nam libero tempore, cum soluta nobis est eligendi optio cumque nihil impedit.
 label: Sed eiusmod
 order: 2
-focus: [ceph, thales-01, thales-02, thales-03]
+focus: [adipiscing, elit, tempor, incididunt]
 ---
 
 Temporibus autem quibusdam et aut officiis debitis aut rerum necessitatibus saepe eveniet ut et voluptates repudiandae sint et molestiae non recusandae. Itaque earum rerum hic tenetur a sapiente delectus, ut aut reiciendis voluptatibus maiores alias consequatur aut perferendis doloribus asperiores repellat.

@@ -90,7 +90,7 @@ article > section h2 { font-size: var(--step-0); }
 .list p { color: var(--muted); margin-top: var(--space-1); }
 
 /* Off-screen but in the accessibility tree and in the print flow: the text equivalent of the
-   constellation's aria-hidden star labels. */
+   scene's aria-hidden labels. */
 .visually-hidden:not(:focus-within) {
   position: absolute;
   width: 1px;
@@ -102,17 +102,15 @@ article > section h2 { font-size: var(--step-0); }
   white-space: nowrap;
 }
 
-/* Hosts grouped by layer, each marked with its star colour. Shared with an incident's focus list. */
-.layers { display: grid; gap: var(--space-5); }
-.layers h2 { font-size: var(--step-1); }
-.hosts { list-style: none; padding: 0; margin: var(--space-2) 0 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr)); gap: var(--space-2) var(--space-4); }
-.hosts li { display: flex; gap: var(--space-2); align-items: baseline; }
-.hosts li::before { content: ''; flex: none; width: 0.4rem; height: 0.4rem; border-radius: 50%; background: var(--star); transform: translateY(-0.1em); }
-.hosts span { color: var(--muted); }
-[data-layer='physical'] { --star: var(--layer-physical); }
-[data-layer='proxmox'] { --star: var(--layer-proxmox); }
-[data-layer='kubernetes'] { --star: var(--layer-kubernetes); }
-[data-layer='services'] { --star: var(--layer-services); }
+/* Stages of the pipeline the ship draws, each marked with its lamp colour. The text equivalent of
+   the scene's aria-hidden module labels. */
+.stages { list-style: none; padding: 0; margin: var(--space-2) 0 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr)); gap: var(--space-2) var(--space-4); }
+.stages li { display: flex; gap: var(--space-2); align-items: baseline; }
+.stages li::before { content: ''; flex: none; width: 0.4rem; height: 0.4rem; border-radius: 50%; background: var(--star-5600); transform: translateY(-0.1em); }
+.stages span { color: var(--muted); }
+
+/* The landing essay: chapters run on down one column, each with an asterism behind it. */
+.essay > section + section { margin-top: var(--space-6); }
 
 /* Resume: a wider two-column grid, scene dimmed nearly to black. */
 .resume .column { max-width: 64rem; }
@@ -172,9 +170,7 @@ article > section h2 { font-size: var(--step-0); }
     margin: 60svh 0 0;
     max-width: none;
     /* Opens at ~40% and drags to full (spec §6) — which needs a full viewport of sheet below the
-       fold to drag against. The landing page used to get that from the host list it printed; now
-       that the constellation is the only presentation of the topology, the sheet supplies its own,
-       or short pages cannot be dragged up over the scene at all. */
+       fold to drag against. Short pages have none of their own, so the sheet supplies it. */
     min-height: 100svh;
     background: var(--ground);
     border-top: 1px solid var(--rule);

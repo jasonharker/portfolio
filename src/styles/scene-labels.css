@@ -23,10 +23,7 @@
 .scene-label > .host, .scene-label > .role { transition: color 150ms; }
 .scene-label.hot > .host { color: var(--star); text-shadow: 0 0 2px var(--ground), 0 0 10px color-mix(in srgb, var(--star) 55%, transparent); }
 .scene-label.hot > .role { color: var(--ink); }
-.scene-label[data-layer='physical'] { --star: var(--layer-physical); }
-.scene-label[data-layer='proxmox'] { --star: var(--layer-proxmox); }
-.scene-label[data-layer='kubernetes'] { --star: var(--layer-kubernetes); }
-.scene-label[data-layer='services'] { --star: var(--layer-services); }
+.scene-label { --star: var(--star-5600); }
 
 /* Resume dims the scene; the labels dim with it. */
 .resume .scene-labels { opacity: 0.12; }
