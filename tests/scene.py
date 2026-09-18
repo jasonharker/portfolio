@@ -485,7 +485,9 @@ def main():
         # Scrolling the essay lights the chapter under the reader's eye.
         lit = []
         for chapter in got['sections']:
-            lb.locator(f'[data-chapter="{chapter}"]').scroll_into_view_if_needed()
+            # Centred, not merely visible: the lit chapter is the one at the reading line, and on a
+            # tall viewport several chapters are on screen at once.
+            lb.eval_on_selector(f'[data-chapter="{chapter}"]', "e => e.scrollIntoView({block: 'center'})")
             lb.wait_for_timeout(250)
             lit.append(wait(lb, f'__scene.chapter === {chapter!r}', 6, fail=False))
         check('essay: scrolling to a chapter lights its asterism', all(lit),

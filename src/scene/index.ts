@@ -195,24 +195,46 @@ export function start(canvas: HTMLCanvasElement, gl: WebGL2RenderingContext, lab
     invalidate: () => loop.invalidate(),
   };
 
-  // The landing essay drives the sky: whichever chapter is in view lights its asterism. One
-  // observer, rebound per navigation, and nothing at all on the other pages. It lives here because
-  // the CSP forbids inline script and this module is already the only one that runs.
-  const chapters = new IntersectionObserver(
-    (entries) => {
-      for (const e of entries) if (e.isIntersecting) scene.chapter((e.target as HTMLElement).dataset.chapter ?? null);
-    },
-    // A band across the middle of the viewport: the chapter being read is the one under the reader's
-    // eye, not the one that has just scrolled into the bottom of the window.
-    { rootMargin: '-45% 0px -45% 0px' },
-  );
+  // The landing essay drives the sky: whichever chapter is under the reader's eye lights its
+  // asterism. It lives here because the CSP forbids inline script and this module is already the
+  // only one that runs; on every other page there is nothing to observe and the sky stays even.
+  //
+  // Nearest to a reading line, not a band: a band across the middle of the viewport leaves the
+  // first and last chapters unable to reach it — a short last section sits at the bottom of the
+  // scroll and never crosses the middle — and those two are a half of a four-chapter essay.
+  const READING_LINE = 0.38; // of the viewport, from the top
+  let sections: HTMLElement[] = [];
+  const pick = () => {
+    if (!sections.length) return;
+    const line = innerHeight * READING_LINE;
+    let best: HTMLElement | null = null;
+    let nearest = Infinity;
+    for (const section of sections) {
+      const box = section.getBoundingClientRect();
+      // Distance from the line to the section's own span, which is zero while it holds the line.
+      const d = Math.abs(Math.min(Math.max(line, box.top), box.bottom) - line);
+      if (d < nearest) (nearest = d), (best = section);
+    }
+    scene.chapter(best?.dataset.chapter ?? null);
+  };
+  let queued = false;
+  const repick = () => {
+    if (queued) return;
+    queued = true;
+    requestAnimationFrame(() => ((queued = false), pick()));
+  };
+  // The reading column is its own scroller on wide screens and the page is the scroller on narrow
+  // ones. A scroll event does not bubble, but it does reach the document in the capture phase.
+  const crossings = new IntersectionObserver(repick, { threshold: [0, 0.1, 0.25, 0.5, 0.75, 1] });
   const watch = () => {
-    chapters.disconnect();
-    const sections = document.querySelectorAll<HTMLElement>('[data-chapter]');
-    if (!sections.length) return scene.chapter(null);
-    for (const section of sections) chapters.observe(section);
+    crossings.disconnect();
+    sections = [...document.querySelectorAll<HTMLElement>('[data-chapter]')];
+    for (const section of sections) crossings.observe(section);
+    pick();
   };
   watch();
+  addEventListener('scroll', repick, { passive: true, capture: true });
+  addEventListener('resize', repick, { passive: true });
   document.addEventListener('astro:page-load', watch);
 
   // Every navigation, including the back button. A second click on the active nav link, or Esc, skips.

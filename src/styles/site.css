@@ -109,8 +109,11 @@ article > section h2 { font-size: var(--step-0); }
 .stages li::before { content: ''; flex: none; width: 0.4rem; height: 0.4rem; border-radius: 50%; background: var(--star-5600); transform: translateY(-0.1em); }
 .stages span { color: var(--muted); }
 
-/* The landing essay: chapters run on down one column, each with an asterism behind it. */
+/* The landing essay: chapters run on down one column, each with an asterism behind it. The tail
+   below the last chapter is load-bearing — the lit chapter is the one at the reading line, and
+   without room to scroll past it the last chapter could never reach that line. */
 .essay > section + section { margin-top: var(--space-6); }
+.essay > section:last-child { padding-bottom: 55svh; }
 
 /* Resume: a wider two-column grid, scene dimmed nearly to black. */
 .resume .column { max-width: 64rem; }
