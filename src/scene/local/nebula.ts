@@ -9,9 +9,13 @@
 // ellipsoids, and twice it read as blown glass: concentric surfaces about one centre are rings
 // whatever you shade them with, and a surface has a rim, which gas does not. It is a volume now —
 // one seeded point cloud of tens of thousands of additive sprites — because what makes gas read as
-// gas is that you see through it, and a cloud of points is see-through for free. Density and colour
-// come from the same lumpy field, so where the nebula is thick it is also hot and runs teal-blue,
-// and the thin material trailing out of it cools through gold to rose.
+// gas is that you see through it, and a cloud of points is see-through for free.
+//
+// A cloud of noise is still a blob, which is what the first volume was. What gives it features is
+// absence: the star has blown a cavity, so the material is a thin wall around a hole and the middle
+// of the object is empty; and the wall is sampled on the ridges of the field rather than its bulk,
+// so it is filaments with lanes between them and not a fog. Colour rides the same field — the hot
+// inner wall runs teal-blue, the older material outside it cools through gold to rose.
 //
 // Cost: two draw calls, the cloud and the pair of central stars, and no full-screen pass at all —
 // where the black hole's lens march was the most expensive shader on the site.
@@ -108,32 +112,61 @@ export function createNebula(ctx: SceneContext): LocalPlace {
     + 0.52 * Math.sin(1.9 * (x + 0.7 * y - 0.4 * z) + 0.8) + 0.46 * Math.sin(2.7 * (z - 0.8 * x + 0.5 * y) + 1.9)
     + 0.38 * Math.sin(3.3 * (y - 0.6 * z + 0.3 * x) + 2.7) + 0.24 * Math.sin(5.1 * (x * y + 0.4 * z));
 
+  // Octaves of it, so the structure has a size range rather than one wavelength.
+  const fbm = (x: number, y: number, z: number) =>
+    0.56 * lump(x, y, z) + 0.28 * lump(2.03 * x + 5.1, 2.03 * y - 3.2, 2.03 * z + 1.7)
+    + 0.16 * lump(4.11 * x - 2.3, 4.11 * y + 7.7, 4.11 * z - 5.5);
+
+  // Where the gas is. Two terms, and both of them are about absence, which is what the first
+  // attempt lacked: a ball of noise is a blob however you colour it.
+  //  - A shell. The star blew a cavity and swept the material into a wall around it, so density
+  //    peaks off-centre and the middle is empty. This is also why the core stopped blowing out:
+  //    nothing is drawn where every grain used to stack.
+  //  - Ridges. Taking 1 - |noise| keeps the thin zero-crossing sheets of the field and throws the
+  //    bulk away, and a thin sheet seen edge-on is a filament. High power = thin, and empty
+  //    between, so there are lanes to read the shape against.
+  const density = (x: number, y: number, z: number) => {
+    const yy = y / FLAT; // the cavity is spherical in the star's frame; the oblateness is a squash of it
+    const r = Math.hypot(x, yy, z) / RING;
+    if (r > SPAN) return 0;
+    // Narrow, and cut hard inside: a thin wall seen through is bright at the limb and empty in
+    // the middle, and that ring is the difference between a nebula and a fuzzy star.
+    const wall = Math.exp(-(((r - 0.78) / 0.13) ** 2)) + 0.05 * Math.exp(-(((r - 1.1) / 0.33) ** 2));
+    const cavity = THREE.MathUtils.smoothstep(r, 0.45, 0.68);
+    const f = fbm(x * 0.34, yy * 0.34, z * 0.34);
+    return wall * cavity * Math.max(0, 1 - Math.abs(1.05 * f)) ** 4;
+  };
+
   const positions = new Float32Array(COUNT * 3);
   const tint = new Float32Array(COUNT * 4);
   const p = new THREE.Vector3();
   const col = new THREE.Color();
+  // Rejection sampling: grains land in proportion to the field, so the cloud's shape is the field's
+  // shape and nothing has to be shaped by hand. Roughly one accept in fifteen; ~30 ms at build.
+  const reach = RING * SPAN;
   for (let i = 0; i < COUNT; i++) {
-    // A direction, then a radius: most of the material sits in a thick body, with streamers out.
-    p.set(gauss(), gauss(), gauss());
-    if (p.lengthSq() < 1e-6) p.set(0, 1, 0);
-    p.normalize();
-    const shape = lump(p.x * 2.4, p.y * 2.4, p.z * 2.4);
-    const r = RING * (0.34 + 0.66 * Math.pow(rand(), 0.55)) * (1 + 0.28 * shape)
-      * (rand() < 0.14 ? 1 + SPAN * Math.pow(rand(), 2.4) : 1);
-    p.multiplyScalar(r);
-    p.y *= FLAT;
-    p.x += gauss() * RING * 0.05;
-    p.y += gauss() * RING * 0.04;
-    p.z += gauss() * RING * 0.05;
+    let d = 0;
+    for (let tries = 0; tries < 400; tries++) {
+      p.set(rand() * 2 - 1, rand() * 2 - 1, rand() * 2 - 1).multiplyScalar(reach);
+      p.y *= FLAT;
+      d = density(p.x, p.y, p.z);
+      if (rand() < d) break;
+    }
+    // A grain is a parcel of gas, not a point: blur it, or the filaments look like wire.
+    p.x += gauss() * RING * 0.012;
+    p.y += gauss() * RING * 0.01;
+    p.z += gauss() * RING * 0.012;
     p.toArray(positions, i * 3);
 
-    // Hot and blue where the gas is thick and near the star; cooling outward through gold to rose.
-    const far = Math.min(1, p.length() / (RING * 1.5));
-    const heat = THREE.MathUtils.clamp(0.72 - 0.55 * far + 0.22 * shape + 0.1 * gauss(), 0, 1);
-    vivid(at(2200 * Math.pow(18000 / 2200, heat), col), 1.35);
-    // The thin outskirts are faint, and every grain varies: an even cloud reads as a solid.
-    const bright = (0.1 + 0.9 * Math.pow(1 - far, 2.2)) * (0.35 + 0.9 * rand()) * (0.5 + 0.5 * Math.max(0, shape));
-    tint.set([col.r, col.g, col.b, 0.03 + 0.17 * bright], i * 4);
+    // Hot and blue on the inner wall the star is lighting; cooling outward through gold to rose.
+    const far = Math.min(1, Math.hypot(p.x, p.y / FLAT, p.z) / (RING * 1.3));
+    const heat = THREE.MathUtils.clamp(0.82 - 0.42 * far + 0.3 * fbm(p.x * 0.15, p.y * 0.15, p.z * 0.15) + 0.06 * gauss(), 0, 1);
+    vivid(at(2200 * Math.pow(18000 / 2200, heat), col), 1.4);
+    // Flat and low: the count already carries the density, so brightness only has to keep the
+    // bright parts off the ceiling. An additive cloud that saturates is a white shape with a
+    // coloured edge, which is exactly what it looked like.
+    const bright = (0.3 + 0.7 * Math.pow(1 - far, 2.2)) * (0.4 + 0.9 * rand());
+    tint.set([col.r, col.g, col.b, 0.014 + 0.036 * bright], i * 4);
   }
 
   const cloudGeometry = keep(new THREE.BufferGeometry());
