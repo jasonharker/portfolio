@@ -380,7 +380,6 @@ export const region: Tier = {
 
   hot: () => near?.place.hot?.() ?? null,
 
-  chapter: (id) => constellation?.chapter(id),
 
   reading: () => (near ? (Object.keys(places) as (keyof typeof places)[]).find((id) => places[id] === near) ?? null : null),
 

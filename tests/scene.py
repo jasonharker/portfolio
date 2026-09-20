@@ -473,8 +473,8 @@ def main():
         drain_csp(tc, 'touch')
         tc_ctx.close()
 
-        # The essay and the sky are one list: a chapter with no section under it would light
-        # nothing, and a section with no chapter would scroll past an unchanging sky.
+        # The essay and the sky are one list: every section has a figure behind it, and every
+        # figure has words under it. Nothing scroll-driven any more — the sky is an even backdrop.
         lb = watch(br.new_page(), 'chapters')
         lb.goto(B + '/')
         scene_up(lb)
@@ -482,16 +482,6 @@ def main():
         check('essay: one [data-chapter] section per chapter in the data',
               got['sections'] == got['data'] and len(got['sections']) >= 2, str(got))
 
-        # Scrolling the essay lights the chapter under the reader's eye.
-        lit = []
-        for chapter in got['sections']:
-            # Centred, not merely visible: the lit chapter is the one at the reading line, and on a
-            # tall viewport several chapters are on screen at once.
-            lb.eval_on_selector(f'[data-chapter="{chapter}"]', "e => e.scrollIntoView({block: 'center'})")
-            lb.wait_for_timeout(250)
-            lit.append(wait(lb, f'__scene.chapter === {chapter!r}', 6, fail=False))
-        check('essay: scrolling to a chapter lights its asterism', all(lit),
-              f"{sum(bool(x) for x in lit)}/{len(lit)}, last chapter={lb.evaluate('__scene.chapter')}")
         drain_csp(lb, 'chapters')
         lb.close()
 
