@@ -33,7 +33,6 @@ const body: Record<string, string[]> = {
   <article class="essay">
     {chapters.map((chapter) => (
       <section class="prose" data-chapter={chapter.id}>
-        <h2>{chapter.name}</h2>
         {(body[chapter.id] ?? []).map((p) => <p>{p}</p>)}
       </section>
     ))}
