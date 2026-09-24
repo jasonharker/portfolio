@@ -91,13 +91,24 @@ const hullFragment = /* glsl */ `
     vec3 v = normalize(vEye);
 
     // Plating: seams on the face's own two axes, and a tone per panel. No texture, no screen space.
+    // Two grids, because one was invisible: a seam a pixel wide and a fifth of a stop deep survives
+    // neither the antialiasing nor the key light. The coarse grid is panels, the fine one is the
+    // run of plate inside a panel, and both are held to a minimum screen width so they still read
+    // when the ship is small in frame.
     vec3 a = abs(n);
-    vec2 uv = (a.x > max(a.y, a.z) ? vPos.zy : a.y > a.z ? vPos.xz : vPos.xy) * 2.3;
-    vec2 g = abs(fract(uv) - 0.5) / max(fwidth(uv), 1e-4);
-    float seam = 1.0 - 0.24 * (1.0 - smoothstep(0.35, 1.1, min(g.x, g.y)));
-    float plate = fract(sin(dot(floor(uv), vec2(41.3, 17.7))) * 4137.1);
+    vec2 uv = a.x > max(a.y, a.z) ? vPos.zy : a.y > a.z ? vPos.xz : vPos.xy;
+    vec2 c = uv * 1.7, f = uv * 6.1;
+    vec2 g = abs(fract(c) - 0.5) / max(fwidth(c), 1e-4);
+    vec2 gf = abs(fract(f) - 0.5) / max(fwidth(f), 1e-4);
+    float seam = smoothstep(0.0, 1.6, min(g.x, g.y));
+    float rivet = smoothstep(0.0, 1.3, min(gf.x, gf.y));
+    float plate = fract(sin(dot(floor(c), vec2(41.3, 17.7))) * 4137.1);
+    float grime = fract(sin(dot(floor(f), vec2(12.9, 78.2))) * 43758.5);
     // Plates are not one grey and not one colour: a hull is patched, and the patches show.
-    vec3 albedo = uHull * vShade * seam * (0.78 + 0.42 * plate) * mix(vec3(1.0), vec3(1.12, 1.0, 0.86), plate);
+    vec3 albedo = uHull * vShade
+      * (0.6 + 0.8 * plate) * (0.86 + 0.14 * grime)
+      * (0.52 + 0.48 * seam) * (0.88 + 0.12 * rivet)
+      * mix(vec3(1.0), vec3(1.16, 0.99, 0.8), plate);
 
     float key = dot(n, uKey);
     vec3 lit = albedo * uKeyTint * pow(max(key, 0.0), 1.6) * 2.3;
