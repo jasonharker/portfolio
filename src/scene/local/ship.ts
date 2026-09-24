@@ -106,9 +106,9 @@ const hullFragment = /* glsl */ `
     float grime = fract(sin(dot(floor(f), vec2(12.9, 78.2))) * 43758.5);
     // Plates are not one grey and not one colour: a hull is patched, and the patches show.
     vec3 albedo = uHull * vShade
-      * (0.6 + 0.8 * plate) * (0.86 + 0.14 * grime)
-      * (0.52 + 0.48 * seam) * (0.88 + 0.12 * rivet)
-      * mix(vec3(1.0), vec3(1.16, 0.99, 0.8), plate);
+      * (0.34 + 1.35 * plate) * (0.72 + 0.28 * grime)
+      * (0.26 + 0.74 * seam) * (0.76 + 0.24 * rivet)
+      * mix(vec3(1.0), vec3(1.3, 0.97, 0.7), plate);
 
     float key = dot(n, uKey);
     vec3 lit = albedo * uKeyTint * pow(max(key, 0.0), 1.6) * 2.3;
