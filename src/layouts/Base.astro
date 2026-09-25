@@ -3,15 +3,16 @@ import { getCollection, getEntry } from 'astro:content';
 import { ClientRouter } from 'astro:transitions';
 import '../styles/site.css';
 import '../styles/scene-labels.css';
+// Same hashed URL the @font-face in tokens.css resolves to, so the preload is the request it uses.
+import pagella from '../fonts/pagella-regular.woff2?url';
 
 interface Props {
   title?: string;
   description?: string;
   bodyClass?: string;
-  noindex?: boolean;
 }
 
-const { title, description = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit.', bodyClass, noindex } = Astro.props;
+const { title, description = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit.', bodyClass } = Astro.props;
 const fullTitle = title ? `${title} — Jason Harker` : 'Jason Harker';
 const path = Astro.url.pathname;
 const nav = [
@@ -38,9 +39,9 @@ const incidents = json(
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="description" content={description} />
     <meta name="theme-color" content="#0a0d16" />
-    {noindex && <meta name="robots" content="noindex" />}
     <title>{fullTitle}</title>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="preload" href={pagella} as="font" type="font/woff2" crossorigin />
     <ClientRouter />
   </head>
   <body class={bodyClass}>
@@ -72,6 +73,8 @@ const incidents = json(
         const button = document.querySelector<HTMLButtonElement>('.look')!;
         button.setAttribute('aria-expanded', String(on));
         button.textContent = on ? 'Close' : 'Read';
+        // On narrow screens the sheet sinks from where it is; scrolled up, it would sink only part way.
+        if (!on) scrollTo({ top: 0 });
       };
       document.addEventListener('astro:page-load', () => {
         set(true);
