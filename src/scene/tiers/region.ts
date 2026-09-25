@@ -59,6 +59,10 @@ const starsVertex = /* glsl */ `
     vAlpha = min(1.0, px * px / 16.0); // below 4 px a star keeps its flux, fading rather than shimmering
     vColor = tint.rgb * uExposure;
     gl_Position = projectionMatrix * mv;
+    // Pinned to the far plane, so a place's hull occludes the backdrop behind it. The points are
+    // still placed in 3D — only their depth is faked — so the parallax through a flight is intact.
+    // Without this the backdrop is depth-free, draws last, and paints straight over the ship.
+    gl_Position.z = gl_Position.w * 0.9999;
   }
 `;
 const starsFragment = /* glsl */ `
@@ -93,6 +97,10 @@ const brightVertex = /* glsl */ `
     vColor = tint.rgb;
     vGain = smoothstep(12.0, 36.0, px) * (0.12 + 1.4 * tint.a) * clamp(px / 80.0, 0.6, 1.4) * uExposure;
     gl_Position = projectionMatrix * mv;
+    // Pinned to the far plane, so a place's hull occludes the backdrop behind it. The points are
+    // still placed in 3D — only their depth is faked — so the parallax through a flight is intact.
+    // Without this the backdrop is depth-free, draws last, and paints straight over the ship.
+    gl_Position.z = gl_Position.w * 0.9999;
   }
 `;
 const brightFragment = /* glsl */ `
@@ -118,6 +126,10 @@ const glowVertex = /* glsl */ `
     vec4 mv = modelViewMatrix * vec4(0.0, 0.0, 0.0, 1.0);
     mv.xy += position.xy * uSize;
     gl_Position = projectionMatrix * mv;
+    // Pinned to the far plane, so a place's hull occludes the backdrop behind it. The points are
+    // still placed in 3D — only their depth is faked — so the parallax through a flight is intact.
+    // Without this the backdrop is depth-free, draws last, and paints straight over the ship.
+    gl_Position.z = gl_Position.w * 0.9999;
   }
 `;
 const glowFragment = /* glsl */ `
@@ -251,17 +263,17 @@ export const region: Tier = {
     const starGeometry = track(new THREE.BufferGeometry());
     starGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
     starGeometry.setAttribute('tint', new THREE.BufferAttribute(tint, 4));
-    const starMaterial = track(new THREE.ShaderMaterial({ vertexShader: starsVertex, fragmentShader: starsFragment, uniforms: starUniforms, ...additive }));
+    const starMaterial = track(new THREE.ShaderMaterial({ vertexShader: starsVertex, fragmentShader: starsFragment, uniforms: starUniforms, ...additive, depthTest: true }));
 
     const brightGeometry = track(new THREE.BufferGeometry());
     brightGeometry.setAttribute('position', new THREE.Float32BufferAttribute(bright, 3));
     brightGeometry.setAttribute('tint', new THREE.Float32BufferAttribute(brightTint, 4));
-    const brightMaterial = track(new THREE.ShaderMaterial({ vertexShader: brightVertex, fragmentShader: brightFragment, uniforms: starUniforms, ...additive }));
+    const brightMaterial = track(new THREE.ShaderMaterial({ vertexShader: brightVertex, fragmentShader: brightFragment, uniforms: starUniforms, ...additive, depthTest: true }));
 
     // The core glow, a camera-facing quad at the origin.
     const glowGeometry = track(new THREE.PlaneGeometry(1, 1));
     glowUniforms.uColor.value = vivid(ctx.colour('--star-12000'), 1.6).multiplyScalar(0.8);
-    const glowMaterial = track(new THREE.ShaderMaterial({ uniforms: glowUniforms, vertexShader: glowVertex, fragmentShader: glowFragment, ...additive }));
+    const glowMaterial = track(new THREE.ShaderMaterial({ uniforms: glowUniforms, vertexShader: glowVertex, fragmentShader: glowFragment, ...additive, depthTest: true }));
     const glow = new THREE.Mesh(glowGeometry, glowMaterial);
     glow.frustumCulled = false;
     glow.renderOrder = 1;
