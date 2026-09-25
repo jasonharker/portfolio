@@ -86,6 +86,14 @@ const hullFragment = /* glsl */ `
   varying vec3 vEye;
   varying float vShade;
 
+  float h21(vec2 p) { return fract(sin(dot(p, vec2(41.3, 17.7))) * 4137.1); }
+  float vnoise(vec2 p) {
+    vec2 i = floor(p), f = fract(p);
+    f = f * f * (3.0 - 2.0 * f);
+    return mix(mix(h21(i), h21(i + vec2(1.0, 0.0)), f.x),
+               mix(h21(i + vec2(0.0, 1.0)), h21(i + vec2(1.0, 1.0)), f.x), f.y);
+  }
+
   void main() {
     vec3 n = normalize(vNormal);
     vec3 v = normalize(vEye);
@@ -106,9 +114,17 @@ const hullFragment = /* glsl */ `
     float grime = fract(sin(dot(floor(f), vec2(12.9, 78.2))) * 43758.5);
     // Plates are not one grey and not one colour: a hull is patched, and the patches show.
     vec3 albedo = uHull * vShade
-      * (0.34 + 1.35 * plate) * (0.72 + 0.28 * grime)
-      * (0.26 + 0.74 * seam) * (0.76 + 0.24 * rivet)
-      * mix(vec3(1.0), vec3(1.3, 0.97, 0.7), plate);
+      * (0.5 + 1.05 * plate) * (0.72 + 0.28 * grime)
+      * (0.26 + 0.74 * seam) * (0.76 + 0.24 * rivet);
+
+    // Weathering, and this is what makes it a surface rather than a tint: blotches at two scales
+    // where the plate has oxidised, and streaks running along the panel where it has been scoured.
+    // Value noise, evaluated in the ship's own frame — the site ships no image files.
+    float wear = 0.46 * vnoise(uv * 3.1) + 0.32 * vnoise(uv * 9.7) + 0.22 * vnoise(vec2(uv.x * 1.3, uv.y * 27.0));
+    albedo *= 0.58 + 0.84 * wear;
+    // Bare metal where it is worn, scorched warm where it is not: the colour is the wear, not a
+    // constant. Nothing here is blue — the cool cast the ship used to have was the key light's.
+    albedo *= mix(vec3(1.22, 1.06, 0.82), vec3(0.92, 0.94, 1.0), smoothstep(0.35, 0.8, wear + 0.25 * plate));
 
     float key = dot(n, uKey);
     vec3 lit = albedo * uKeyTint * pow(max(key, 0.0), 1.6) * 2.3;
@@ -341,11 +357,13 @@ export function createShip(ctx: SceneContext): LocalPlace {
   ];
   const hullUniforms = {
     uKey: { value: new THREE.Vector3() },
-    uKeyTint: { value: tint('--star-12000', 1.6, 1.15) },
-    uFill: { value: tint('--star-30000', 1.2, 0.05) },
+    // Near-white, barely cool: at 12000 K vivid'd to 1.6 the only light on the ship was blue, so
+    // every plate on it was blue whatever the hull was painted.
+    uKeyTint: { value: tint('--star-6800', 0.35, 1.15) },
+    uFill: { value: tint('--star-30000', 0.8, 0.045) },
     // Dark grey, not white: an enclosed hull turns a lot of plate toward the key, and at the old
     // albedo the whole flank blew out into one flat blue sheet. What shapes it is the falloff.
-    uHull: { value: tint('--muted', 0.55, 0.26) },
+    uHull: { value: new THREE.Color(0.30, 0.288, 0.268) },
     uLamp: { value: lamps },
     uLampTint: { value: [...tints.slice(0, BAYS), tints[ENGINE], tints[BEAD]] },
   };
