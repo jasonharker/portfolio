@@ -1,16 +1,32 @@
-/* Design tokens (spec §6). Draft for review on /tokens before any scene code.
+/* Design tokens (spec §6).
  *
  * Principles
  * 1. The page is night sky; text sits on it, never on a card.
  * 2. Colour comes from physics: accents are stars, sampled along the blackbody curve.
- * 3. One reading column, plain words; the scene carries the spectacle, the type does not.
+ * 3. One reading column, plain words, one serif; the scene carries the spectacle, the type does not.
  * 4. Nothing decorates: no uppercase labels, shadows, rounded boxes, gradients on text, or arrows.
+ *
+ * Avoid
+ * - Cream ground, serif type, terracotta accent
+ * - Near-black ground with a single neon accent
+ * - Rounded cards, drop shadows, gradient washes
+ * - Uppercase eyebrow labels
+ * - Middot-separated meta strings
+ * - Monospace labels
+ * - Arrows on links
  */
+
+/* TeX Gyre Pagella: the free Palatino (GUST Font License, src/fonts/GUST-FONT-LICENSE.txt).
+   Self-hosted and unmodified, converted to woff2 only; the real Palatino is the fallback. */
+@font-face { font-family: Pagella; src: url('../fonts/pagella-regular.woff2') format('woff2'); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: Pagella; src: url('../fonts/pagella-bold.woff2') format('woff2'); font-weight: 700; font-style: normal; font-display: swap; }
+@font-face { font-family: Pagella; src: url('../fonts/pagella-italic.woff2') format('woff2'); font-weight: 400; font-style: italic; font-display: swap; }
 
 :root {
   color-scheme: dark;
 
-  /* Ground and ink. The ground is the scene's sky, a deep blue-black, not #000. */
+  /* Ground and ink. The ground is the scene's sky, a deep blue-black, not #000. --ground is
+     repeated in Base.astro's theme-color meta, which can't read a custom property. */
   --ground: #0a0d16;
   --ground-raised: #111626;
   --ink: #e6e9f2;
@@ -34,11 +50,13 @@
   --chapter-3: var(--star-5600);
   --chapter-4: var(--star-12000);
 
-  /* Type. System fonts only: humanist sans for reading, mono only for real code. */
-  --sans: Seravek, 'Gill Sans Nova', Ubuntu, Calibri, 'DejaVu Sans', source-sans-pro, sans-serif;
+  /* Type. One serif for everything, mono only for real code. */
+  --serif: Pagella, 'Palatino Linotype', Palatino, 'URW Palladio L', P052, serif;
   --mono: ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, Consolas, 'DejaVu Sans Mono', monospace;
 
-  /* Scale, ratio 1.25 from a 1.0625rem body. */
+  /* Scale, ratio 1.25 from a 1.0625rem body. --step--2 is off the ratio on purpose: the floor for
+     the scene labels' notes, which have to stay legible over the sky. */
+  --step--2: 0.75rem;
   --step--1: 0.85rem;
   --step-0: 1.0625rem;
   --step-1: 1.33rem;
@@ -53,6 +71,11 @@
   --space-4: 1.5rem;
   --space-5: 2.5rem;
   --space-6: 4rem;
+
+  /* Easing. Out for things arriving, in for things leaving, in-out for toggles. */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in: cubic-bezier(0.7, 0, 0.84, 0);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
 
   --measure: 38rem;
   /* The rail is the resting state: menu and wordmark only, the scene has the rest of the frame.
