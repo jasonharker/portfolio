@@ -32,6 +32,8 @@
   --ink: #e6e9f2;
   --muted: #9aa2b8;
   --rule: #262c3f;
+  /* The recede under the open column: ground, part-transparent so the stars show through. */
+  --veil: color-mix(in srgb, var(--ground) 70%, transparent);
 
   /* Blackbody accents, all at OKLab L 0.82 so none shouts louder than another.
    * Kelvin in the name; spectral class in the comment. */
@@ -90,5 +92,6 @@
     --ink: #fff;
     --muted: #d6dbe8;
     --rule: #7c85a0;
+    --veil: var(--ground);
   }
 }

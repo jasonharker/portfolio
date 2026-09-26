@@ -40,7 +40,7 @@ p { margin: 0; }
   position: absolute;
   inset: 0;
   opacity: 0;
-  background: linear-gradient(to right, var(--ground) 0, var(--ground) var(--reading), transparent calc(var(--reading) + 14rem));
+  background: linear-gradient(to right, var(--veil) 0, var(--veil) var(--reading), transparent calc(var(--reading) + 14rem));
   transition: opacity 0.35s var(--ease-in-out);
 }
 [data-read] .scene::after { opacity: 1; }
@@ -126,6 +126,8 @@ article > section h2 { font-size: var(--step-0); }
 
 /* Resume: a wider two-column grid, scene dimmed nearly to black. */
 .resume .column { max-width: 64rem; }
+/* The column and its recede both follow --reading, so widening it here widens both. */
+.resume { --reading: calc(var(--rail) + 64rem); }
 .cv { display: grid; grid-template-columns: 12rem minmax(0, 1fr); gap: var(--space-4) var(--space-5); }
 .cv > h2 { font-size: var(--step-0); color: var(--muted); font-weight: 400; }
 .cv section > * + * { margin-top: var(--space-2); }
@@ -166,7 +168,6 @@ article > section h2 { font-size: var(--step-0); }
   }
   /* Tabbing into the prose brings it in: the column is off-canvas, never unreachable. */
   [data-read] .column, .column:focus-within { transform: none; }
-  .resume .column { width: min(100%, calc(var(--rail) + 64rem)); }
 }
 
 /* Mobile: the column becomes a bottom sheet opening at ~40% height; scrolling drags it up
