@@ -12,7 +12,7 @@ interface Props {
   bodyClass?: string;
 }
 
-const { title, description = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit.', bodyClass } = Astro.props;
+const { title, description = 'Jason Harker, cloud engineer in Las Vegas: Kubernetes, GitOps and the homelab behind them.', bodyClass } = Astro.props;
 const fullTitle = title ? `${title} — Jason Harker` : 'Jason Harker';
 const path = Astro.url.pathname;
 const nav = [

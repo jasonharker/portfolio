@@ -2,6 +2,9 @@
 
 *, *::before, *::after { box-sizing: border-box; }
 
+/* Nothing scrolls sideways. clip, not hidden: hidden would make each a scroll container. */
+html, body { overflow-x: clip; }
+
 body {
   margin: 0;
   background: var(--ground);
@@ -14,7 +17,7 @@ a { color: var(--link); text-underline-offset: 0.2em; text-decoration-thickness:
 a:hover { text-decoration-thickness: 2px; }
 :focus-visible { outline: 2px solid var(--star-5600); outline-offset: 2px; }
 
-h1, h2, h3 { font-weight: 600; line-height: 1.2; text-wrap: balance; overflow-wrap: anywhere; min-width: 0; margin: 0; }
+h1, h2, h3 { font-weight: 700; line-height: 1.2; text-wrap: balance; overflow-wrap: anywhere; min-width: 0; margin: 0; }
 h1 { font-size: var(--step-4); }
 h2 { font-size: var(--step-2); }
 h3 { font-size: var(--step-1); }
@@ -49,7 +52,7 @@ p { margin: 0; }
   gap: var(--space-2) var(--space-5);
   padding: var(--space-4) clamp(var(--space-3), 6vw, var(--space-6));
 }
-.wordmark { font-size: var(--step-1); font-weight: 600; color: var(--ink); text-decoration: none; }
+.wordmark { font-size: var(--step-1); font-weight: 700; color: var(--ink); text-decoration: none; }
 .masthead nav { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); }
 .masthead nav a { color: var(--muted); text-decoration: none; }
 .masthead nav a:hover, .masthead nav a[aria-current='page'] { color: var(--ink); }
@@ -82,7 +85,9 @@ p { margin: 0; }
 .list > li { padding-block: var(--space-4); border-top: 1px solid var(--rule); }
 .list > li:last-child { border-bottom: 1px solid var(--rule); }
 .list a { color: var(--ink); text-decoration: none; display: block; }
-.list a:hover h2, .list a:hover h3 { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 0.2em; }
+/* Titles read as links without a pointer (touch has no hover); hover brightens the underline. */
+.list h2, .list h3 { text-decoration: underline 1px var(--rule); text-underline-offset: 0.2em; }
+.list a:hover h2, .list a:hover h3 { text-decoration-color: currentColor; }
 .label { color: var(--star-4300); }
 article > * + * { margin-top: var(--space-4); }
 article > .prose, article > section { margin-top: var(--space-5); }
@@ -121,7 +126,7 @@ article > section h2 { font-size: var(--step-0); }
 
 /* Resume: a wider two-column grid, scene dimmed nearly to black. */
 .resume .column { max-width: 64rem; }
-.cv { display: grid; grid-template-columns: 12rem 1fr; gap: var(--space-4) var(--space-5); }
+.cv { display: grid; grid-template-columns: 12rem minmax(0, 1fr); gap: var(--space-4) var(--space-5); }
 .cv > h2 { font-size: var(--step-0); color: var(--muted); font-weight: 400; }
 .cv section > * + * { margin-top: var(--space-2); }
 .cv .entry + .entry { margin-top: var(--space-4); }
