@@ -144,35 +144,47 @@ export function createNebula(ctx: SceneContext): LocalPlace {
   // field's shape with nothing shaped by hand. In two stages: a radius from the wall's profile (1D,
   // cheap), a direction at random, then accept on the ridges. Sampling the whole field out of a
   // cube took ~130 tries a grain and seconds of main thread before the site could draw; this is ~3.
-  for (let i = 0; i < COUNT; i++) {
-    for (let tries = 0; tries < 400; tries++) {
-      let r: number;
-      do r = 0.45 + (SPAN - 0.45) * rand();
-      while (rand() * top > shell(r));
-      p.set(gauss(), gauss(), gauss()).setLength(r * RING);
-      if (rand() < ridge(p.x, p.y, p.z)) break;
-    }
-    p.y *= FLAT;
-    // A grain is a parcel of gas, not a point: blur it, or the filaments look like wire.
-    p.x += gauss() * RING * 0.012;
-    p.y += gauss() * RING * 0.01;
-    p.z += gauss() * RING * 0.012;
-    p.toArray(positions, i * 3);
+  // Still ~0.7 s on a laptop, so it runs in idle slices after the first frame (below): the landing
+  // page never shows this place. Resumable, so the seeded sequence and the cloud are unchanged.
+  let i = 0;
+  const sample = (until: number) => {
+    for (; i < until; i++) {
+      for (let tries = 0; tries < 400; tries++) {
+        let r: number;
+        do r = 0.45 + (SPAN - 0.45) * rand();
+        while (rand() * top > shell(r));
+        p.set(gauss(), gauss(), gauss()).setLength(r * RING);
+        if (rand() < ridge(p.x, p.y, p.z)) break;
+      }
+      p.y *= FLAT;
+      // A grain is a parcel of gas, not a point: blur it, or the filaments look like wire.
+      p.x += gauss() * RING * 0.012;
+      p.y += gauss() * RING * 0.01;
+      p.z += gauss() * RING * 0.012;
+      p.toArray(positions, i * 3);
 
-    // Hot and blue on the inner wall the star is lighting; cooling outward through gold to rose.
-    const far = Math.min(1, Math.hypot(p.x, p.y / FLAT, p.z) / (RING * 1.3));
-    const heat = THREE.MathUtils.clamp(0.82 - 0.42 * far + 0.3 * fbm(p.x * 0.15, p.y * 0.15, p.z * 0.15) + 0.06 * gauss(), 0, 1);
-    vivid(at(2200 * Math.pow(18000 / 2200, heat), col), 1.4);
-    // Flat and low: the count already carries the density, so brightness only has to keep the
-    // bright parts off the ceiling. An additive cloud that saturates is a white shape with a
-    // coloured edge, which is exactly what it looked like.
-    const bright = (0.3 + 0.7 * Math.pow(1 - far, 2.2)) * (0.4 + 0.9 * rand());
-    tint.set([col.r, col.g, col.b, 0.014 + 0.036 * bright], i * 4);
-  }
+      // Hot and blue on the inner wall the star is lighting; cooling outward through gold to rose.
+      const far = Math.min(1, Math.hypot(p.x, p.y / FLAT, p.z) / (RING * 1.3));
+      const heat = THREE.MathUtils.clamp(0.82 - 0.42 * far + 0.3 * fbm(p.x * 0.15, p.y * 0.15, p.z * 0.15) + 0.06 * gauss(), 0, 1);
+      vivid(at(2200 * Math.pow(18000 / 2200, heat), col), 1.4);
+      // Flat and low: the count already carries the density, so brightness only has to keep the
+      // bright parts off the ceiling. An additive cloud that saturates is a white shape with a
+      // coloured edge, which is exactly what it looked like.
+      const bright = (0.3 + 0.7 * Math.pow(1 - far, 2.2)) * (0.4 + 0.9 * rand());
+      tint.set([col.r, col.g, col.b, 0.014 + 0.036 * bright], i * 4);
+    }
+    if (i < COUNT) return;
+    cloudGeometry.attributes.position.needsUpdate = cloudGeometry.attributes.tint.needsUpdate = true;
+    ctx.invalidate();
+  };
 
   const cloudGeometry = keep(new THREE.BufferGeometry());
   cloudGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
   cloudGeometry.setAttribute('tint', new THREE.BufferAttribute(tint, 4));
+  // ponytail: fixed slices, not deadline-sized; ~15 ms each on a T480. Safari has no requestIdleCallback.
+  const idle = window.requestIdleCallback ?? ((f: () => void) => setTimeout(f, 50));
+  const slice = () => (sample(Math.min(COUNT, i + 2000)), i < COUNT && idle(slice));
+  idle(slice);
   const cloudUniforms = { uScale: { value: 1 }, uSize: { value: 0.34 }, uPhase: { value: 0 } };
   const cloudMaterial = keep(new THREE.ShaderMaterial({
     vertexShader: cloudVertex, fragmentShader: cloudFragment, uniforms: cloudUniforms, ...additive,
@@ -180,6 +192,9 @@ export function createNebula(ctx: SceneContext): LocalPlace {
   const cloud = new THREE.Points(cloudGeometry, cloudMaterial);
   cloud.frustumCulled = false;
   cloud.renderOrder = 1;
+  // Drawn before the slices finish (a direct load of /documentation): finish now. The upload lands
+  // on the next frame, which ctx.invalidate() asks for; until then the grains are all alpha 0.
+  cloud.onBeforeRender = () => i < COUNT && sample(COUNT);
   group.add(cloud);
 
   // The pair at the centre. The white dwarf is what lights all of the above; the companion is the
