@@ -16,10 +16,10 @@ const { title, description = 'Jason Harker, cloud engineer in Las Vegas: Kuberne
 const fullTitle = title ? `${title} — Jason Harker` : 'Jason Harker';
 const path = Astro.url.pathname;
 const nav = [
-  { href: '/incidents/', label: 'Incidents' },
-  { href: '/gitops/', label: 'GitOps' },
-  { href: '/documentation/', label: 'Documentation' },
   { href: '/resume/', label: 'Resume' },
+  { href: '/documentation/', label: 'Documentation' },
+  { href: '/gitops/', label: 'GitOps' },
+  { href: '/incidents/', label: 'Incidents' },
 ];
 // A JSON data block is never executed, so script-src 'self' allows it. Escape '<' so no
 // value can close the tag.

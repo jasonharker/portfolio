@@ -71,6 +71,7 @@ const PUSH_F = 0.55; // how hard the centre pushes
 const SPRING = 34; // pull back to rest, rad/s
 const DAMP = 0.86; // velocity kept per frame; under 1 so it settles rather than rings
 const REST_EPS = 1e-4; // below this the star is home and stops asking for frames
+const PROBE_EPS = 2e-3; // a pointer hit that moved less than this, in galaxy units, hasn't moved
 // Breath: the whole sky inhales, slowly. Idle life that survives on touch and with the pointer
 // off-window, which the repulsion above cannot. Ambient frames only.
 const BREATH = 0.015; // fraction of scale
@@ -286,7 +287,10 @@ export function createConstellation(ctx: SceneContext, centre: THREE.Vector3, sc
         probing = false;
         return;
       }
-      if (!probing || !probe.equals(point)) settled = false;
+      // The idle drift moves the camera every frame, so a still pointer's hit point creeps; a creep
+      // under PROBE_EPS is not a change, or a star under the pointer chases it at full rate forever.
+      if (probing && probe.distanceTo(point) < PROBE_EPS) return;
+      settled = false;
       probing = true;
       probe.copy(point);
     },
@@ -316,13 +320,16 @@ export function createConstellation(ctx: SceneContext, centre: THREE.Vector3, sc
               (fx = dx * k), (fy = dy * k), (fz = dz * k);
             }
           }
+          // A star the pointer is pushing rests where the push meets the spring, not at home: once
+          // its velocity dies it is settled there, or a pointer parked on a star holds full rate forever.
+          const pushed = fx !== 0 || fy !== 0 || fz !== 0;
           for (let v = 0; v < 3; v++) {
             const j = o + v;
             const home = rest[j] - positions[j];
             velocity[j] = (velocity[j] + ([fx, fy, fz][v] + home * SPRING) * dt) * DAMP;
             positions[j] += velocity[j] * dt;
-            if (Math.abs(positions[j] - rest[j]) > REST_EPS || Math.abs(velocity[j]) > REST_EPS) moving = true;
-            else (positions[j] = rest[j]), (velocity[j] = 0);
+            if (Math.abs(velocity[j]) > REST_EPS || (!pushed && Math.abs(positions[j] - rest[j]) > REST_EPS)) moving = true;
+            else if (!pushed) (positions[j] = rest[j]), (velocity[j] = 0);
           }
         }
         starAttribute.needsUpdate = true;

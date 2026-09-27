@@ -21,6 +21,11 @@ const PARALLAX_W = 10; // critically damped spring, rad/s: settles in ~0.6 s
 // pass on every ambient frame (30/s) where a still camera could skip it; 0 turns it off.
 const DRIFT = 0.01;
 const DRIFT_S: [number, number] = [31, 23]; // periods of the lateral and vertical swing
+// Drag to orbit, landing page only: radians per CSS pixel, and how far either way. The clamp keeps
+// the constellation's plate from turning edge-on. Unlike the parallax it stays where it is let go,
+// and eases home on the next navigation or Esc.
+const ORBIT_PX = 0.004;
+const ORBIT_MAX = [0.6, 0.3]; // yaw, pitch
 
 export function start(canvas: HTMLCanvasElement, gl: WebGL2RenderingContext, labels: HTMLElement): Scene {
   const renderer = new THREE.WebGLRenderer({ canvas, context: gl });
@@ -40,15 +45,17 @@ export function start(canvas: HTMLCanvasElement, gl: WebGL2RenderingContext, lab
   let active: Tier | null = null;
   let pose: CameraPose = { position: [0, 0, 1], target: [0, 0, 0], fov: 50 };
 
-  // Mouse parallax: `goal` is the pointer in [-1, 1] (y up), `at`/`vel` the eased value per axis.
-  const goal = [0, 0], at = [0, 0], vel = [0, 0];
+  // `goal` is [parallax x, parallax y, orbit yaw, orbit pitch]: the pointer in [-1, 1] (y up), then
+  // the drag in radians. `at`/`vel` are the eased value per axis; one spring serves both.
+  const goal = [0, 0, 0, 0], at = [0, 0, 0, 0], vel = [0, 0, 0, 0];
   let drift = 0; // seconds of rendered frames
   let swayed = 0; // camera offset from the pose position / view distance, for __scene
-  const [eye, look, right, up] = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+  const [eye, look, right, up, arm] = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+  const Y = new THREE.Vector3(0, 1, 0);
   const ease = (dt: number) => {
     let moving = false;
     const e = Math.exp(-PARALLAX_W * dt);
-    for (let i = 0; i < 2; i++) {
+    for (let i = 0; i < 4; i++) {
       const d = at[i] - goal[i], k = (vel[i] + PARALLAX_W * d) * dt;
       at[i] = goal[i] + (d + k) * e;
       vel[i] = (vel[i] - PARALLAX_W * k) * e;
@@ -61,12 +68,20 @@ export function start(canvas: HTMLCanvasElement, gl: WebGL2RenderingContext, lab
   function aim() {
     eye.set(...pose.position);
     look.set(...pose.target);
+    // Orbit first, about the target: yaw about the disc's axis, pitch about the view's horizontal.
+    if (at[2] || at[3]) {
+      arm.subVectors(eye, look);
+      right.crossVectors(Y, arm).normalize();
+      arm.applyAxisAngle(right, -at[3]).applyAxisAngle(Y, -at[2]);
+      eye.addVectors(look, arm);
+    }
     const dist = eye.distanceTo(look);
     const [sx, sy] = [
       PARALLAX * at[0] + DRIFT * Math.sin((2 * Math.PI * drift) / DRIFT_S[0]),
       PARALLAX * at[1] + DRIFT * 0.6 * Math.sin((2 * Math.PI * drift) / DRIFT_S[1]),
     ];
     swayed = Math.hypot(sx, sy);
+    camera.up.copy(Y);
     if (swayed) {
       camera.position.copy(eye);
       camera.lookAt(look); // the view basis to shift along
@@ -75,6 +90,9 @@ export function start(canvas: HTMLCanvasElement, gl: WebGL2RenderingContext, lab
       eye.addScaledVector(right, sx * dist).addScaledVector(up, sy * dist);
       // Parallax swings the view about a point beyond the target; drift orbits the target itself.
       look.addScaledVector(right, (PARALLAX * at[0] * dist) / 3).addScaledVector(up, (PARALLAX * at[1] * dist) / 3);
+      // Keep the pose's own roll. Against world Y a view looking straight down (resume's overhead)
+      // has no horizon to hold, and the sway alone would spin it.
+      camera.up.copy(up);
     }
     camera.position.copy(eye);
     camera.lookAt(look);
@@ -115,6 +133,7 @@ export function start(canvas: HTMLCanvasElement, gl: WebGL2RenderingContext, lab
     get tier() { return active?.id ?? null; },
     get paused() { return loop.paused; },
     get parallax() { return Math.hypot(at[0], at[1]); },
+    get orbit() { return Math.hypot(at[2], at[3]); },
     get sway() { return swayed; },
     get hoverable() { return !!active?.hot; },
   };
@@ -151,6 +170,31 @@ export function start(canvas: HTMLCanvasElement, gl: WebGL2RenderingContext, lab
   loop.pause('hidden', document.hidden);
   covered();
 
+  // Orbit goal, clamped. Under reduced motion there is no spring, so the camera goes straight there:
+  // a drag is the viewer's own hand, not animation.
+  const orbit = (yaw: number, pitch: number) => {
+    goal[2] = THREE.MathUtils.clamp(yaw, -ORBIT_MAX[0], ORBIT_MAX[0]);
+    goal[3] = THREE.MathUtils.clamp(pitch, -ORBIT_MAX[1], ORBIT_MAX[1]);
+    if (!sway) (at[2] = goal[2]), (at[3] = goal[3]);
+    loop.invalidate();
+  };
+  // Drag on the landing sky, mouse or pen. Touch is left alone: on a phone a drag is the sheet's scroll.
+  let drag: { x: number; y: number; yaw: number; pitch: number } | null = null;
+  const root = document.documentElement;
+  addEventListener('pointerdown', (e) => {
+    if (e.pointerType === 'touch' || e.button !== 0 || debug.place !== 'constellation') return;
+    if ((e.target as Element).closest?.('.column, .masthead')) return;
+    e.preventDefault(); // no text selection
+    drag = { x: e.clientX, y: e.clientY, yaw: goal[2], pitch: goal[3] };
+    root.toggleAttribute('data-dragging', true);
+  });
+  addEventListener('pointermove', (e) => {
+    if (drag) orbit(drag.yaw + (e.clientX - drag.x) * ORBIT_PX, drag.pitch + (e.clientY - drag.y) * ORBIT_PX);
+  }, { passive: true });
+  const release = () => ((drag = null), root.toggleAttribute('data-dragging', false));
+  addEventListener('pointerup', release);
+  addEventListener('pointercancel', release);
+
   // Mouse only: touch has no hover, and a drag is a scroll. The same pointer drives the parallax.
   const point = (x: number, y: number) => {
     if (!sway || (goal[0] === x && goal[1] === y)) return;
@@ -180,9 +224,9 @@ export function start(canvas: HTMLCanvasElement, gl: WebGL2RenderingContext, lab
         debug.flights.push(path);
       }
       director.to(place, { instant });
-      loop.invalidate();
+      orbit(0, 0); // eases home over the flight's first moments, so the dolly starts where the camera is
     },
-    skip: () => (director.skip(), loop.invalidate()),
+    skip: () => (director.skip(), orbit(0, 0)),
     invalidate: () => loop.invalidate(),
   };
 

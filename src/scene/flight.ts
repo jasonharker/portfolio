@@ -14,7 +14,7 @@
 // change of level of detail rather than a change of place.
 import type { CameraPose, Director, PlaceId, Stage, Tier, TierId, Vec3 } from './types';
 
-const CROSSOVER = 8; // kpc: Galaxy above, Region below
+export const CROSSOVER = 8; // kpc: Galaxy above, Region below
 const DUR = 2.4; // seconds, place to place
 const NEAR_DUR = 0.6; // seconds for a reframe that never leaves the place
 const OPEN_DUR = 2.6; // seconds for the push-in the site opens with

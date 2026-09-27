@@ -123,6 +123,12 @@ article > section h2 { font-size: var(--step-0); }
 .landing .dek { font-size: var(--step-0); }
 .landing .column > * + * { margin-top: var(--space-3); }
 .essay > section + section { margin-top: var(--space-3); }
+/* The landing sky can be dragged to orbit the camera (scene/index.ts); the words and the rail can't. */
+@media (hover: hover) {
+  .landing { cursor: grab; }
+  .landing .column, .landing .masthead { cursor: auto; }
+  [data-dragging], [data-dragging] * { cursor: grabbing; }
+}
 
 /* Resume: a wider two-column grid, scene dimmed nearly to black. */
 .resume .column { max-width: 64rem; }
