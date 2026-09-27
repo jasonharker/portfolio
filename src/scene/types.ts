@@ -34,7 +34,13 @@ export interface Quality {
  * one continuous move rather than a cut between tiers whose poses can't be compared. A place's own
  * units reach it through its group's scale (see LocalPlace). Tiers set their near/far in render().
  */
-export interface CameraPose { position: Vec3; target: Vec3; fov: number }
+export interface CameraPose {
+  position: Vec3;
+  target: Vec3;
+  fov: number;
+  /** Screen up. Absent means world Y, square to the view; a view straight down has no such up and must say. */
+  up?: Vec3;
+}
 
 export interface SceneContext {
   renderer: THREE.WebGLRenderer;
@@ -63,7 +69,6 @@ export interface Tier {
   hover?(x: number, y: number): void;
   hot?(): string | null; // id of whatever the pointer is over (a ship module), or null (read into __scene.hot)
   reading?(): PlaceId | null; // the place close enough to be read, or null out among the arms
-  chapter?(id: string | null): void; // light the asterism of the essay chapter in view
   href?(): string | null; // the URL a click on the pointer's target would open, or null
   render(renderer: THREE.WebGLRenderer, camera: THREE.Camera): void;
   resize?(width: number, height: number): void; // CSS pixels; renderer is already resized
@@ -122,8 +127,6 @@ export interface Director {
 
 export interface Scene {
   goTo(path: string, opts?: { instant?: boolean }): void;
-  /** The landing essay's chapter in view; lights its asterism and dims the rest. */
-  chapter(id: string | null): void;
   skip(): void;
   invalidate(): void;
 }
@@ -143,11 +146,11 @@ export interface SceneDebug {
   idle: boolean; // no frame is scheduled
   rate: 'full' | 'ambient' | 'idle'; // ambient: only the ≤30 fps idle animation is running
   hot: string | null; // what the pointer is over in the scene (a ship module), or null
-  chapter: string | null; // the landing essay's chapter in view, which lights its asterism
   reading: PlaceId | null; // the place the camera is close enough to read; null while out among the arms
   tier: TierId | null; // the tier being rendered; null until the first cut
   paused: boolean;
   parallax: number; // eased mouse offset, 0 at rest, up to ~1.4 in a viewport corner
+  orbit: number; // eased drag orbit on the landing page, radians; stays where the drag left it
   sway: number; // camera offset from the director's pose, as a fraction of view distance (parallax + drift)
   hoverable: boolean; // the active tier implements hot()
 }

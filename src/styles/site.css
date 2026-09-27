@@ -2,11 +2,14 @@
 
 *, *::before, *::after { box-sizing: border-box; }
 
+/* Nothing scrolls sideways. clip, not hidden: hidden would make each a scroll container. */
+html, body { overflow-x: clip; }
+
 body {
   margin: 0;
   background: var(--ground);
   color: var(--ink);
-  font: var(--step-0)/1.6 var(--sans);
+  font: var(--step-0)/1.6 var(--serif);
   -webkit-font-smoothing: antialiased;
 }
 
@@ -14,7 +17,7 @@ a { color: var(--link); text-underline-offset: 0.2em; text-decoration-thickness:
 a:hover { text-decoration-thickness: 2px; }
 :focus-visible { outline: 2px solid var(--star-5600); outline-offset: 2px; }
 
-h1, h2, h3 { font-weight: 600; line-height: 1.2; text-wrap: balance; margin: 0; }
+h1, h2, h3 { font-weight: 700; line-height: 1.2; text-wrap: balance; overflow-wrap: anywhere; min-width: 0; margin: 0; }
 h1 { font-size: var(--step-4); }
 h2 { font-size: var(--step-2); }
 h3 { font-size: var(--step-1); }
@@ -37,8 +40,8 @@ p { margin: 0; }
   position: absolute;
   inset: 0;
   opacity: 0;
-  background: linear-gradient(to right, var(--ground) 0, var(--ground) var(--reading), transparent calc(var(--reading) + 14rem));
-  transition: opacity 0.35s;
+  background: linear-gradient(to right, var(--veil) 0, var(--veil) var(--reading), transparent calc(var(--reading) + 14rem));
+  transition: opacity 0.35s var(--ease-in-out);
 }
 [data-read] .scene::after { opacity: 1; }
 
@@ -49,7 +52,7 @@ p { margin: 0; }
   gap: var(--space-2) var(--space-5);
   padding: var(--space-4) clamp(var(--space-3), 6vw, var(--space-6));
 }
-.wordmark { font-size: var(--step-1); font-weight: 600; color: var(--ink); text-decoration: none; }
+.wordmark { font-size: var(--step-1); font-weight: 700; color: var(--ink); text-decoration: none; }
 .masthead nav { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); }
 .masthead nav a { color: var(--muted); text-decoration: none; }
 .masthead nav a:hover, .masthead nav a[aria-current='page'] { color: var(--ink); }
@@ -62,7 +65,7 @@ p { margin: 0; }
   padding: 0;
   cursor: pointer;
 }
-.look:hover, .look[aria-pressed='true'] { color: var(--ink); }
+.look:hover, .look[aria-expanded='false'] { color: var(--ink); }
 
 /* Fixed reading column. */
 .column {
@@ -82,7 +85,9 @@ p { margin: 0; }
 .list > li { padding-block: var(--space-4); border-top: 1px solid var(--rule); }
 .list > li:last-child { border-bottom: 1px solid var(--rule); }
 .list a { color: var(--ink); text-decoration: none; display: block; }
-.list a:hover h2, .list a:hover h3 { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 0.2em; }
+/* Titles read as links without a pointer (touch has no hover); hover brightens the underline. */
+.list h2, .list h3 { text-decoration: underline 1px var(--rule); text-underline-offset: 0.2em; }
+.list a:hover h2, .list a:hover h3 { text-decoration-color: currentColor; }
 .label { color: var(--star-4300); }
 article > * + * { margin-top: var(--space-4); }
 article > .prose, article > section { margin-top: var(--space-5); }
@@ -109,20 +114,32 @@ article > section h2 { font-size: var(--step-0); }
 .stages li::before { content: ''; flex: none; width: 0.4rem; height: 0.4rem; border-radius: 50%; background: var(--star-5600); transform: translateY(-0.1em); }
 .stages span { color: var(--muted); }
 
-/* The landing essay: chapters run on down one column, each with an asterism behind it. The tail
-   below the last chapter is load-bearing — the lit chapter is the one at the reading line, and
-   without room to scroll past it the last chapter could never reach that line. */
-.essay > section + section { margin-top: var(--space-6); }
-.essay > section:last-child { padding-bottom: 55svh; }
+/* The landing essay: chapters run on down one column, with the asterisms behind them. The gaps are
+   tighter than an article's and the column gives back its bottom padding, so the essay at its
+   current length sits inside a laptop viewport and the page has no scrollbar at all. It is the
+   first thing anyone sees; a scrollbar on four short paragraphs reads as a page that didn't fit. */
+.landing .column { padding-top: var(--space-4); padding-bottom: var(--space-3); }
+.landing h1 { font-size: var(--step-3); }
+.landing .dek { font-size: var(--step-0); }
+.landing .column > * + * { margin-top: var(--space-3); }
+.essay > section + section { margin-top: var(--space-3); }
+/* The landing sky can be dragged to orbit the camera (scene/index.ts); the words and the rail can't. */
+@media (hover: hover) {
+  .landing { cursor: grab; }
+  .landing .column, .landing .masthead { cursor: auto; }
+  [data-dragging], [data-dragging] * { cursor: grabbing; }
+}
 
 /* Resume: a wider two-column grid, scene dimmed nearly to black. */
 .resume .column { max-width: 64rem; }
-.cv { display: grid; grid-template-columns: 12rem 1fr; gap: var(--space-4) var(--space-5); }
+/* The column and its recede both follow --reading, so widening it here widens both. */
+.resume { --reading: calc(var(--rail) + 64rem); }
+.cv { display: grid; grid-template-columns: 12rem minmax(0, 1fr); gap: var(--space-4) var(--space-5); }
 .cv > h2 { font-size: var(--step-0); color: var(--muted); font-weight: 400; }
 .cv section > * + * { margin-top: var(--space-2); }
 .cv .entry + .entry { margin-top: var(--space-4); }
 .cv .when { color: var(--muted); }
-.cv ul { margin: var(--space-2) 0 0; padding-left: 1.1rem; }
+.cv ul { margin: var(--space-2) 0 0; padding-left: var(--space-3); }
 
 /* Wide screens: the masthead becomes a rail down the left and the column slides over it. Narrow
    screens keep the bottom sheet below, which the render loop's covered() measures — don't move it. */
@@ -153,19 +170,15 @@ article > section h2 { font-size: var(--step-0); }
     overflow-y: auto;
     overscroll-behavior: contain;
     transform: translateX(-100%);
-    transition: transform 0.35s;
+    transition: transform 0.35s var(--ease-in-out);
   }
   /* Tabbing into the prose brings it in: the column is off-canvas, never unreachable. */
   [data-read] .column, .column:focus-within { transform: none; }
-  .resume .column { width: min(100%, calc(var(--rail) + 64rem)); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .column { transition: none; }
 }
 
 /* Mobile: the column becomes a bottom sheet opening at ~40% height; scrolling drags it up
-   over the frozen scene. */
+   over the frozen scene. Closing it sinks the sheet to a strip at the foot of the screen, which
+   still shows where the words went; covered() only pauses the scene at top <= 0, so this is safe. */
 @media (max-width: 48rem) {
   .scene::after { background: linear-gradient(to bottom, transparent 45%, var(--ground) 60%); }
   .masthead { position: absolute; inset: 0 0 auto; }
@@ -177,14 +190,19 @@ article > section h2 { font-size: var(--step-0); }
     min-height: 100svh;
     background: var(--ground);
     border-top: 1px solid var(--rule);
+    transition: transform 0.35s var(--ease-in-out);
   }
+  :root:not([data-read]) .column:not(:focus-within) { transform: translateY(calc(40svh - 3.5rem)); }
+  /* The sheet is full width; the words keep their measure. */
+  .column > * { max-width: var(--measure); }
   h1 { font-size: var(--step-3); }
   .cv { grid-template-columns: 1fr; gap: var(--space-2); }
   .cv > h2 { margin-top: var(--space-4); }
 }
 
+/* After both layouts, so it outranks each one's column transition. */
 @media (prefers-reduced-motion: reduce) {
-  .scene::after { transition: none; }
+  .scene::after, .column { transition: none; }
 }
 
 @media print {
@@ -198,11 +216,6 @@ article > section h2 { font-size: var(--step-0); }
   .cv { grid-template-columns: 9rem 1fr; }
 }
 
-/* /tokens review page only. */
-.swatches { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(8rem, 1fr)); gap: var(--space-3); }
-.swatches li::before { content: ''; display: block; height: 3rem; margin-bottom: var(--space-1); background: var(--swatch); border: 1px solid var(--rule); }
-.swatches code { font-family: var(--mono); font-size: var(--step--1); color: var(--muted); }
-
 /* M2 scene: the canvas fills .scene under the recede gradient; labels sit above it. */
 .scene canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 .scene-labels { position: fixed; inset: 0; z-index: -1; pointer-events: none; }
@@ -211,8 +224,8 @@ article > section h2 { font-size: var(--step-0); }
    back a root crossfade, prose and scene together; (root) outranks Astro's (*). Browsers without
    view transitions (Safari 17) still cut. */
 @media (prefers-reduced-motion: reduce) {
-  ::view-transition-old(root) { animation: 250ms ease-out both rm-fade-out !important; }
-  ::view-transition-new(root) { animation: 250ms ease-in both rm-fade-in !important; }
+  ::view-transition-old(root) { animation: 250ms var(--ease-in) both rm-fade-out !important; }
+  ::view-transition-new(root) { animation: 250ms var(--ease-out) both rm-fade-in !important; }
 }
 @keyframes rm-fade-out { to { opacity: 0 } }
 @keyframes rm-fade-in { from { opacity: 0 } }

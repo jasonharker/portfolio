@@ -80,7 +80,9 @@ export const SPIKES = /* glsl */ `
 `;
 
 const skyVertex = /* glsl */ `
-  // Direction-only: the point sits at infinity, pinned to the far plane.
+  // Direction-only: the point sits at infinity, pinned to the far plane — and depth-tested there,
+  // so anything in the scene occludes it. Without that the sky draws over the hull it is behind and
+  // the ship reads as transparent.
   vec4 skyPosition(vec3 dir) {
     vec4 clip = projectionMatrix * vec4(mat3(viewMatrix) * dir, 1.0);
     clip.z = clip.w * 0.9999;
@@ -283,7 +285,7 @@ export function createSky(fieldCount: number, foregroundCount: number, dpr: numb
   fieldGeometry.setAttribute('tint', new THREE.Float32BufferAttribute(fieldTint, 4));
   fieldGeometry.setAttribute('lens', new THREE.Float32BufferAttribute(lens, 3));
   const fieldUniforms = { uDpr: { value: dpr }, uGain: { value: 1 } };
-  const fieldMaterial = new THREE.ShaderMaterial({ vertexShader: fieldVertex, fragmentShader: fieldFragment, uniforms: fieldUniforms, ...additive });
+  const fieldMaterial = new THREE.ShaderMaterial({ vertexShader: fieldVertex, fragmentShader: fieldFragment, uniforms: fieldUniforms, ...additive , depthTest: true });
   const field = new THREE.Points(fieldGeometry, fieldMaterial);
 
   // Foreground stars: the brightest things in any frame, blackbody-tinted from the tokens. Mostly
@@ -303,7 +305,7 @@ export function createSky(fieldCount: number, foregroundCount: number, dpr: numb
   fgGeometry.setAttribute('tint', new THREE.Float32BufferAttribute(fgTint, 4));
   fgGeometry.setAttribute('phase', new THREE.Float32BufferAttribute(phase, 1));
   const fgUniforms = { uDpr: { value: dpr }, uGain: { value: 1 }, uTime: { value: 0 } };
-  const fgMaterial = new THREE.ShaderMaterial({ vertexShader: foregroundVertex, fragmentShader: foregroundFragment, uniforms: fgUniforms, ...additive });
+  const fgMaterial = new THREE.ShaderMaterial({ vertexShader: foregroundVertex, fragmentShader: foregroundFragment, uniforms: fgUniforms, ...additive , depthTest: true });
   const foreground = new THREE.Points(fgGeometry, fgMaterial);
 
   const group = new THREE.Group();

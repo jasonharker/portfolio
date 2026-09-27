@@ -10,30 +10,29 @@ import Base from '../layouts/Base.astro';
 const { chapters } = (await getEntry('topology', 'thales'))!.data;
 const body: Record<string, string[]> = {
   warehouse: [
-    'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.',
-    'Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum, sed ut perspiciatis unde omnis iste natus error.',
+    'When I was 14 the family computer had a hardware failure, so I scrapped together a new one. Rather than install Windows Vista I chose a Debian distro called Crunchbang. Thus began a lifelong obsession with Linux and FOSS technology. ',
+    'I was so indecisive about what I wanted to do when I grew up. It never occurred to me that this hobby could be my career, or that Id be good at it.',
   ],
   philosophy: [
-    'Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo.',
-    'Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit, sed quia consequuntur magni dolores eos qui ratione voluptatem sequi nesciunt. Neque porro quisquam est, qui dolorem ipsum quia dolor sit amet, consectetur, adipisci velit.',
+    'In high school I got sick and I started spending way more time on the computer. I was bedridden--scrubbing StackOverflow for help with Makefiles, installing Gentoo, learning Python--instead of going to class.',
+    'But I still graduated on-time at 17 thanks to summer school. I worked in factories and warehouses for a few years after high school until I enrolled in UNLV to study one of my other passions, Philosophy.',
   ],
   'vet-med': [
-    'At vero eos et accusamus et iusto odio dignissimos ducimus qui blanditiis praesentium voluptatum deleniti atque corrupti quos dolores et quas molestias excepturi sint occaecati cupiditate non provident, similique sunt in culpa.',
-    'Et harum quidem rerum facilis est et expedita distinctio. Nam libero tempore, cum soluta nobis est eligendi optio cumque nihil impedit quo minus id quod maxime placeat facere possimus, omnis voluptas assumenda est.',
+    'While studying in college, I took a job at a veterinary hospital. I\'d spend the duration of the pandemic working in the field.',
+    'Eventually I started studying for the CompTIA A+ on my lunch breaks, got my certification, and began aggressively pursuing help desk jobs until Circa took a chance on me.',
   ],
   'casino-it': [
-    'Temporibus autem quibusdam et aut officiis debitis aut rerum necessitatibus saepe eveniet ut et voluptates repudiandae sint et molestiae non recusandae. Itaque earum rerum hic tenetur a sapiente delectus, ut aut reiciendis voluptatibus maiores.',
-    'Ut enim ad minima veniam, quis nostrum exercitationem ullam corporis suscipit laboriosam, nisi ut aliquid ex ea commodi consequatur. Quis autem vel eum iure reprehenderit qui in ea voluptate velit esse quam nihil molestiae consequatur.',
+    'At Circa I was prompty promoted to Desktop Support Specialist. About a year later, I was promoted to Sysadmin, and about a year after that, I let slip that I run a sophisticated K8s cluster in my homelab and was promoted to Cloud Engineer not long after.',
+    'Stick the landing.',
   ],
 };
 ---
-<Base>
+<Base bodyClass="landing">
   <h1>Lorem ipsum dolor sit amet</h1>
   <p class="dek">Consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p>
   <article class="essay">
     {chapters.map((chapter) => (
       <section class="prose" data-chapter={chapter.id}>
-        <h2>{chapter.name}</h2>
         {(body[chapter.id] ?? []).map((p) => <p>{p}</p>)}
       </section>
     ))}

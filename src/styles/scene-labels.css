@@ -19,9 +19,9 @@
   will-change: transform;
 }
 .scene-label > span { display: block; }
-.scene-label > .note { font-size: 0.75rem; color: var(--muted); }
-.scene-label > .name, .scene-label > .note { transition: color 150ms; }
-.scene-label.hot > .name { color: var(--star); text-shadow: 0 0 2px var(--ground), 0 0 10px color-mix(in srgb, var(--star) 55%, transparent); }
+.scene-label > .note { font-size: var(--step--2); color: var(--muted); }
+.scene-label > .name, .scene-label > .note { transition: color 150ms var(--ease-out); }
+.scene-label.hot > .name { color: var(--star); }
 .scene-label.hot > .note { color: var(--ink); }
 .scene-label { --star: var(--star-5600); }
 

@@ -266,20 +266,49 @@ def main():
         # M3 read each place in a Local tier of its own and this asserted the tier. M4 has one tier
         # below the galaxy, so the invariant is the object rather than the tier: the flight ends
         # close enough to the destination that it, and nothing else, is the thing being read.
-        # Resume is in this list because it is no longer the exception that froze the camera: it has
-        # a waypoint and an object like every other route, which is the whole point of the change.
-        for path, place in (('/incidents/', 'incidents'), ('/gitops/', 'gitops'), ('/documentation/', 'documentation'),
-                            ('/resume/', 'resume')):
+        for path, place in (('/incidents/', 'incidents'), ('/gitops/', 'gitops'), ('/documentation/', 'documentation')):
             pg.click(f'.masthead a[href="{path}"]')
             wait(pg, f'__scene.path === {path!r}')
             settle(pg)
             st = pg.evaluate('({reading: __scene.reading, tier: __scene.tier, place: __scene.place})')
             check(f'place: {path} arrives at its object', st == {'reading': place, 'tier': 'region', 'place': place}, str(st))
+        # Resume has no object: it is the whole disc from overhead, far enough out that Galaxy draws it.
+        pg.click('.masthead a[href="/resume/"]')
+        wait(pg, "__scene.path === '/resume/'")
+        settle(pg)
+        st = pg.evaluate('({reading: __scene.reading, tier: __scene.tier, place: __scene.place})')
+        check('place: /resume/ arrives overhead, in the Galaxy tier', st == {'reading': None, 'tier': 'galaxy', 'place': 'resume'}, str(st))
         pg.click('a.wordmark')
         wait(pg, "__scene.path === '/'")
         settle(pg)
         st = pg.evaluate('({reading: __scene.reading, tier: __scene.tier})')
         check('place: the constellation reads no object', st == {'reading': None, 'tier': 'region'}, str(st))
+
+        # Drag to orbit (landing only). The sky right of the column orbits and stays put on release;
+        # a drag that starts on the words does nothing; navigating away brings the camera home.
+        vw, vh = pg.viewport_size['width'], pg.viewport_size['height']
+        pg.mouse.move(vw * 0.1, vh * 0.5)
+        pg.mouse.down()
+        pg.mouse.move(vw * 0.1 - 120, vh * 0.5 + 40, steps=6)
+        pg.mouse.up()
+        pg.wait_for_timeout(300)
+        check('orbit: a drag on the column does nothing', pg.evaluate('__scene.orbit') == 0, str(pg.evaluate('__scene.orbit')))
+        pg.mouse.move(vw * 0.85, vh * 0.5)
+        pg.mouse.down()
+        pg.mouse.move(vw * 0.85 - 120, vh * 0.5 + 40, steps=6)
+        pg.mouse.up()
+        settle(pg)
+        o1 = pg.evaluate('__scene.orbit')
+        pg.wait_for_timeout(1000)
+        o2 = pg.evaluate('__scene.orbit')
+        check('orbit: a drag on the sky orbits, and stays on release', o1 > 0.2 and abs(o2 - o1) < 1e-3, f'{o1} -> {o2}')
+        pg.click('.masthead a[href="/gitops/"]')
+        wait(pg, "__scene.path === '/gitops/'")
+        settle(pg)
+        check('orbit: navigating away brings the camera home', pg.evaluate('__scene.orbit') == 0, str(pg.evaluate('__scene.orbit')))
+        pg.click('a.wordmark')
+        wait(pg, "__scene.path === '/'")
+        settle(pg)
 
         # Flights, skip, retarget (W3). Baseline: a full flight between two non-landing places.
         pg.click('nav a[href="/gitops/"]')
@@ -368,6 +397,11 @@ def main():
         rm.wait_for_timeout(1000)
         st = rm.evaluate('({parallax: __scene.parallax, sway: __scene.sway, idle: __scene.idle})')
         check('reduced motion: no parallax, no drift', st == {'parallax': 0, 'sway': 0, 'idle': True}, str(st))
+        rm.click('.masthead a[href="/resume/"]')
+        wait(rm, "__scene.path === '/resume/'")
+        wait(rm, "__scene.tier === 'galaxy'", 15, fail=False)
+        check('reduced motion: resume stills overhead, in the Galaxy tier', rm.evaluate("__scene.tier === 'galaxy' && !__scene.flying"),
+              str(rm.evaluate('__scene.tier')))
         drain_csp(rm, 'reduced-motion')
         rm_ctx.close()
 
@@ -473,8 +507,8 @@ def main():
         drain_csp(tc, 'touch')
         tc_ctx.close()
 
-        # The essay and the sky are one list: a chapter with no section under it would light
-        # nothing, and a section with no chapter would scroll past an unchanging sky.
+        # The essay and the sky are one list: every section has a figure behind it, and every
+        # figure has words under it. Nothing scroll-driven any more — the sky is an even backdrop.
         lb = watch(br.new_page(), 'chapters')
         lb.goto(B + '/')
         scene_up(lb)
@@ -482,16 +516,6 @@ def main():
         check('essay: one [data-chapter] section per chapter in the data',
               got['sections'] == got['data'] and len(got['sections']) >= 2, str(got))
 
-        # Scrolling the essay lights the chapter under the reader's eye.
-        lit = []
-        for chapter in got['sections']:
-            # Centred, not merely visible: the lit chapter is the one at the reading line, and on a
-            # tall viewport several chapters are on screen at once.
-            lb.eval_on_selector(f'[data-chapter="{chapter}"]', "e => e.scrollIntoView({block: 'center'})")
-            lb.wait_for_timeout(250)
-            lit.append(wait(lb, f'__scene.chapter === {chapter!r}', 6, fail=False))
-        check('essay: scrolling to a chapter lights its asterism', all(lit),
-              f"{sum(bool(x) for x in lit)}/{len(lit)}, last chapter={lb.evaluate('__scene.chapter')}")
         drain_csp(lb, 'chapters')
         lb.close()
 
@@ -534,17 +558,6 @@ def main():
               f'{stages}, hot={found}')
         drain_csp(sh, 'ship')
         sh.close()
-
-        # The comet is not a still life: its grains stream and its body drifts, on ambient frames.
-        cm = watch(br.new_page(), 'comet')
-        cm.goto(B + '/resume/')
-        scene_up(cm)
-        settle(cm)
-        first = cm.screenshot()
-        cm.wait_for_timeout(1500)
-        check('comet: the tail is moving', cm.screenshot() != first, 'two frames 1.5 s apart are identical')
-        drain_csp(cm, 'comet')
-        cm.close()
 
         drain_csp(pg, 'main')
         check('no CSP violations', not csp_hits, '; '.join(csp_hits[:5]))

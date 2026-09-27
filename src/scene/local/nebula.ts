@@ -136,22 +136,34 @@ export function createNebula(ctx: SceneContext): LocalPlace {
     const f = fbm(x * 0.34, yy * 0.34, z * 0.34);
     return wall * cavity * Math.max(0, 1 - Math.abs(1.05 * f)) ** 4;
   };
+  // Both are in the star's frame, where the cavity is spherical; the oblateness is a squash of it.
+  // The wall, per unit radius (so with its r²): narrow, and cut hard inside — a thin wall seen
+  // through is bright at the limb and empty in the middle, and that ring is the difference between
+  // a nebula and a fuzzy star.
+  const shell = (r: number) =>
+    r * r * (Math.exp(-(((r - 0.78) / 0.13) ** 2)) + 0.05 * Math.exp(-(((r - 1.1) / 0.33) ** 2))) * THREE.MathUtils.smoothstep(r, 0.45, 0.68);
+  const ridge = (x: number, yy: number, z: number) => Math.max(0, 1 - Math.abs(1.05 * fbm(x * 0.34, yy * 0.34, z * 0.34))) ** 4;
+  let top = 0;
+  for (let r = 0.45; r <= SPAN; r += 1e-3) top = Math.max(top, shell(r));
+  top *= 1.01;
 
   const positions = new Float32Array(COUNT * 3);
   const tint = new Float32Array(COUNT * 4);
   const p = new THREE.Vector3();
   const col = new THREE.Color();
-  // Rejection sampling: grains land in proportion to the field, so the cloud's shape is the field's
-  // shape and nothing has to be shaped by hand. Roughly one accept in fifteen; ~30 ms at build.
-  const reach = RING * SPAN;
+  // Rejection sampling, so grains land in proportion to the field and the cloud's shape is the
+  // field's shape with nothing shaped by hand. In two stages: a radius from the wall's profile (1D,
+  // cheap), a direction at random, then accept on the ridges. Sampling the whole field out of a
+  // cube took ~130 tries a grain and seconds of main thread before the site could draw; this is ~3.
   for (let i = 0; i < COUNT; i++) {
-    let d = 0;
     for (let tries = 0; tries < 400; tries++) {
-      p.set(rand() * 2 - 1, rand() * 2 - 1, rand() * 2 - 1).multiplyScalar(reach);
-      p.y *= FLAT;
-      d = density(p.x, p.y, p.z);
-      if (rand() < d) break;
+      let r: number;
+      do r = 0.45 + (SPAN - 0.45) * rand();
+      while (rand() * top > shell(r));
+      p.set(gauss(), gauss(), gauss()).setLength(r * RING);
+      if (rand() < ridge(p.x, p.y, p.z)) break;
     }
+    p.y *= FLAT;
     // A grain is a parcel of gas, not a point: blur it, or the filaments look like wire.
     p.x += gauss() * RING * 0.012;
     p.y += gauss() * RING * 0.01;

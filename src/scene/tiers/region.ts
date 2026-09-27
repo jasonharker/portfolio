@@ -19,7 +19,6 @@ import { createConstellation, type Constellation } from '../constellation';
 import { createDust, type Dust } from '../dust';
 import { DISC_RADIUS, galaxyModel, prng, SEED } from '../galaxy-model';
 import { additive, createSky, palette, SPIKES, vivid, type Sky } from '../jwst';
-import { createComet } from '../local/comet';
 import { createNebula } from '../local/nebula';
 import { createOrrery } from '../local/orrery';
 import { createShip } from '../local/ship';
@@ -31,6 +30,8 @@ const ELEVATION = THREE.MathUtils.degToRad(24);
 const AZIMUTH = THREE.MathUtils.degToRad(46); // swings the view so the core falls toward an edge
 const FOV = 50;
 const CONSTELLATION_SCALE = 1.0; // galaxy units per constellation-local unit
+const OVERHEAD_FIT = 1.1; // resume's overhead frame: disc radii to the frame's short half-extent
+const OVERHEAD_SHIFT = 0.45; // and how far off centre the disc sits, in half-extents
 // The view distance a place is read from, in kpc, which is what sets its group's scale. Chosen, not
 // physical: honest metres would put 17 empty decades between the arm and the object, and a scale
 // nothing in frame can be measured against is no scale at all. What has to hold is that a place is
@@ -59,6 +60,10 @@ const starsVertex = /* glsl */ `
     vAlpha = min(1.0, px * px / 16.0); // below 4 px a star keeps its flux, fading rather than shimmering
     vColor = tint.rgb * uExposure;
     gl_Position = projectionMatrix * mv;
+    // Pinned to the far plane, so a place's hull occludes the backdrop behind it. The points are
+    // still placed in 3D — only their depth is faked — so the parallax through a flight is intact.
+    // Without this the backdrop is depth-free, draws last, and paints straight over the ship.
+    gl_Position.z = gl_Position.w * 0.9999;
   }
 `;
 const starsFragment = /* glsl */ `
@@ -93,6 +98,10 @@ const brightVertex = /* glsl */ `
     vColor = tint.rgb;
     vGain = smoothstep(12.0, 36.0, px) * (0.12 + 1.4 * tint.a) * clamp(px / 80.0, 0.6, 1.4) * uExposure;
     gl_Position = projectionMatrix * mv;
+    // Pinned to the far plane, so a place's hull occludes the backdrop behind it. The points are
+    // still placed in 3D — only their depth is faked — so the parallax through a flight is intact.
+    // Without this the backdrop is depth-free, draws last, and paints straight over the ship.
+    gl_Position.z = gl_Position.w * 0.9999;
   }
 `;
 const brightFragment = /* glsl */ `
@@ -118,6 +127,10 @@ const glowVertex = /* glsl */ `
     vec4 mv = modelViewMatrix * vec4(0.0, 0.0, 0.0, 1.0);
     mv.xy += position.xy * uSize;
     gl_Position = projectionMatrix * mv;
+    // Pinned to the far plane, so a place's hull occludes the backdrop behind it. The points are
+    // still placed in 3D — only their depth is faked — so the parallax through a flight is intact.
+    // Without this the backdrop is depth-free, draws last, and paints straight over the ship.
+    gl_Position.z = gl_Position.w * 0.9999;
   }
 `;
 const glowFragment = /* glsl */ `
@@ -177,6 +190,23 @@ function base(place: PlaceId) {
   const right = new THREE.Vector3(0, 1, 0).cross(back).normalize();
   const up = back.clone().cross(right);
   return { target, position, right, up, back, distance };
+}
+
+/**
+ * Resume: the whole disc from straight above, the face-on view M74 is famous for. It is far past
+ * CROSSOVER, so the flight hands it to the Galaxy tier; it lives here only because every place is
+ * framed here. Straight down there is no horizon, so the pose names its own screen up: -z, which
+ * keeps +x screen right.
+ */
+function overhead(aspect: number): CameraPose {
+  const tan = Math.tan(THREE.MathUtils.degToRad(FOV / 2));
+  const fit = OVERHEAD_FIT * DISC_RADIUS;
+  const d = aspect >= 1 ? fit / tan : fit / (tan * aspect);
+  const half = d * tan;
+  // Screen right is +x and screen up is -z: wide screens push the disc right of the wide CV,
+  // portrait ones push it up above the bottom sheet.
+  const [tx, tz] = aspect >= 1 ? [-OVERHEAD_SHIFT * half * aspect, 0] : [0, OVERHEAD_SHIFT * half];
+  return { position: [tx, d, tz], target: [tx, 0, tz], fov: FOV, up: [0, 0, -1] };
 }
 
 function track<T extends { dispose(): void }>(d: T): T {
@@ -251,17 +281,17 @@ export const region: Tier = {
     const starGeometry = track(new THREE.BufferGeometry());
     starGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
     starGeometry.setAttribute('tint', new THREE.BufferAttribute(tint, 4));
-    const starMaterial = track(new THREE.ShaderMaterial({ vertexShader: starsVertex, fragmentShader: starsFragment, uniforms: starUniforms, ...additive }));
+    const starMaterial = track(new THREE.ShaderMaterial({ vertexShader: starsVertex, fragmentShader: starsFragment, uniforms: starUniforms, ...additive, depthTest: true }));
 
     const brightGeometry = track(new THREE.BufferGeometry());
     brightGeometry.setAttribute('position', new THREE.Float32BufferAttribute(bright, 3));
     brightGeometry.setAttribute('tint', new THREE.Float32BufferAttribute(brightTint, 4));
-    const brightMaterial = track(new THREE.ShaderMaterial({ vertexShader: brightVertex, fragmentShader: brightFragment, uniforms: starUniforms, ...additive }));
+    const brightMaterial = track(new THREE.ShaderMaterial({ vertexShader: brightVertex, fragmentShader: brightFragment, uniforms: starUniforms, ...additive, depthTest: true }));
 
     // The core glow, a camera-facing quad at the origin.
     const glowGeometry = track(new THREE.PlaneGeometry(1, 1));
     glowUniforms.uColor.value = vivid(ctx.colour('--star-12000'), 1.6).multiplyScalar(0.8);
-    const glowMaterial = track(new THREE.ShaderMaterial({ uniforms: glowUniforms, vertexShader: glowVertex, fragmentShader: glowFragment, ...additive }));
+    const glowMaterial = track(new THREE.ShaderMaterial({ uniforms: glowUniforms, vertexShader: glowVertex, fragmentShader: glowFragment, ...additive, depthTest: true }));
     const glow = new THREE.Mesh(glowGeometry, glowMaterial);
     glow.frustumCulled = false;
     glow.renderOrder = 1;
@@ -285,7 +315,7 @@ export const region: Tier = {
     // The destinations. Each is built in its own units and then scaled so the distance its pose()
     // asks for is READ kpc; 16:9 is the reference, so the scale is a property of the place and not
     // of the viewport. Nothing else about the object is touched.
-    const built = { incidents: createOrrery(ctx), gitops: createShip(ctx), documentation: createNebula(ctx), resume: createComet(ctx) };
+    const built = { incidents: createOrrery(ctx), gitops: createShip(ctx), documentation: createNebula(ctx) };
     for (const [id, place] of Object.entries(built) as [keyof typeof built, LocalPlace][]) {
       const p = place.pose(16 / 9);
       // The tier has one lens (a flight that changed FOV mid-move would read as a zoom on top of the
@@ -329,6 +359,7 @@ export const region: Tier = {
   frame(place) {
     // A destination object frames itself, in its own units; the group's scale and position carry
     // that out into galaxy space, which is the only space the camera ever works in.
+    if (place === 'resume') return overhead(width / height);
     const p = places[place as keyof typeof places];
     if (p) {
       const pose = p.place.pose(width / height);
@@ -361,7 +392,7 @@ export const region: Tier = {
     sky.update(dt);
     // The camera may have moved under a still pointer: test against last frame's label positions.
     if (!Number.isNaN(pointer.x)) region.hover!(pointer.x, pointer.y);
-    // Idle life runs in the place being read, and only there: the other three are a galaxy away.
+    // Idle life runs in the place being read, and only there: the others are a galaxy away.
     const moving = near?.place.update(dt) ?? false;
     return constellation.update(dt) || moving;
   },
@@ -380,7 +411,6 @@ export const region: Tier = {
 
   hot: () => near?.place.hot?.() ?? null,
 
-  chapter: (id) => constellation?.chapter(id),
 
   reading: () => (near ? (Object.keys(places) as (keyof typeof places)[]).find((id) => places[id] === near) ?? null : null),
 

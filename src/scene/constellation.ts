@@ -4,7 +4,7 @@
 // M5: the stars used to be the homelab's hosts, laid out by band and pushed apart so their labels
 // would not collide. The essay is the subject now and the sky is its backdrop, so the figures are
 // authored rather than generated (a relaxation solver makes a scatter, not a shape) and nothing is
-// labelled. The chapter in view is lit; the others fall back far enough to read as background but
+// labelled. Every figure is lit alike: it is a backdrop, not an index of the prose.
 // not so far that the journey disappears.
 //
 // Layout, in constellation-local units (x right, y up, z toward the viewer): each chapter's stars
@@ -21,9 +21,7 @@ const DEPTH = 0.62;
 // How large a figure is drawn relative to the spacing between figures. Authored star coordinates
 // keep a shape legible on their own; this is the one knob for how much sky each chapter takes.
 const FIGURE = 1.35;
-const DIM = 0.26; // how far an unread chapter falls back
-const TRAVEL = 0.3; // the line of travel between figures, relative to a lit chapter's links
-const LIT_S = 0.55; // a chapter lights and falls back over this
+const TRAVEL = 0.3; // the line of travel between figures, relative to a chapter's own links
 const CHAPTER_TOKENS = ['--chapter-1', '--chapter-2', '--chapter-3', '--chapter-4'];
 
 /** FNV-1a, 32-bit. */
@@ -73,6 +71,7 @@ const PUSH_F = 0.55; // how hard the centre pushes
 const SPRING = 34; // pull back to rest, rad/s
 const DAMP = 0.86; // velocity kept per frame; under 1 so it settles rather than rings
 const REST_EPS = 1e-4; // below this the star is home and stops asking for frames
+const PROBE_EPS = 2e-3; // a pointer hit that moved less than this, in galaxy units, hasn't moved
 // Breath: the whole sky inhales, slowly. Idle life that survives on touch and with the pointer
 // off-window, which the repulsion above cannot. Ambient frames only.
 const BREATH = 0.015; // fraction of scale
@@ -133,9 +132,7 @@ export interface Constellation {
   resize(dpr: number): void;
   /** Dim the lines with camera distance, as the stars shrink, so from afar the sky is a faint figure. */
   fade(cameraDistance: number): void;
-  /** Light one chapter's asterism and let the rest fall back. null lights them all evenly. */
-  chapter(id: string | null): void;
-  /** Advance the twinkle and ease the lit chapter. true while easing. */
+  /** Advance the twinkle and the stars' springs. true while anything is still moving. */
   update(dt: number): boolean;
   /** Where the pointer meets the constellation's plane, in world space, or null when it leaves. */
   probe(point: THREE.Vector3 | null): void;
@@ -194,10 +191,10 @@ export function createConstellation(ctx: SceneContext, centre: THREE.Vector3, sc
   const offset: number[] = [];
   base = 0;
   for (const c of topology.chapters) (offset.push(base), (base += c.stars.length));
-  const edges: { a: number; b: number; chapter: number; travel: boolean }[] = [];
+  const edges: { a: number; b: number; travel: boolean }[] = [];
   topology.chapters.forEach((c, ci) => {
-    for (const [a, b] of c.lines) edges.push({ a: offset[ci] + a, b: offset[ci] + b, chapter: ci, travel: false });
-    if (ci + 1 < chapters) edges.push({ a: offset[ci], b: offset[ci + 1], chapter: ci, travel: true });
+    for (const [a, b] of c.lines) edges.push({ a: offset[ci] + a, b: offset[ci] + b, travel: false });
+    if (ci + 1 < chapters) edges.push({ a: offset[ci], b: offset[ci + 1], travel: true });
   });
   const segments = new Float32Array(edges.length * 6);
   edges.forEach((e, i) => {
@@ -222,16 +219,12 @@ export function createConstellation(ctx: SceneContext, centre: THREE.Vector3, sc
   lines.frustumCulled = false;
   lines.renderOrder = 2;
 
-  // How lit each chapter is: 1 for the one being read, DIM for the rest, eased. A plain array, not
-  // a Float32Array: the ease stops when a value reaches its target exactly, and a Float32Array
-  // rounds the target on the way in — 0.26 stores as 0.2599999904632568, never equals the double it
-  // came from, and the whole scene eases at full rate for ever.
-  const heat = new Array<number>(chapters).fill(1);
+  // Every figure is lit the same. The essay used to light the chapter under the reader and dim the
+  // rest, but with the prose this short there was barely a scroll to drive it, and a brightness
+  // change on figures the camera never turns toward reads as nothing at all.
   const paint = () => {
     edges.forEach((e, i) => {
-      const k = e.travel
-        ? TRAVEL * Math.max(heat[e.chapter], heat[e.chapter + 1])
-        : 0.34 + 0.9 * heat[e.chapter];
+      const k = e.travel ? TRAVEL : 1.24;
       for (let v = 0; v < 6; v += 3) {
         linkColours[i * 6 + v] = link.r * k;
         linkColours[i * 6 + v + 1] = link.g * k;
@@ -239,7 +232,7 @@ export function createConstellation(ctx: SceneContext, centre: THREE.Vector3, sc
       }
     });
     linkAttribute.needsUpdate = true;
-    for (let i = 0; i < n; i++) life[i * 2 + 1] = heat[stars[i].chapter];
+    for (let i = 0; i < n; i++) life[i * 2 + 1] = 1;
     lifeAttribute.needsUpdate = true;
   };
   paint();
@@ -264,7 +257,6 @@ export function createConstellation(ctx: SceneContext, centre: THREE.Vector3, sc
   let probing = false;
   let settled = true; // every star is at rest and nothing needs a frame
   let breath = 0; // seconds, only advanced on rendered frames
-  let reading: number | null = null; // index of the chapter in view
 
   /** Move the lines to wherever their stars actually are. */
   const restring = () => {
@@ -287,16 +279,6 @@ export function createConstellation(ctx: SceneContext, centre: THREE.Vector3, sc
     fade(cameraDistance) {
       lineMaterial.opacity = THREE.MathUtils.clamp(viewDistance / cameraDistance, 0.15, 1);
     },
-    chapter(id) {
-      const next = id === null ? null : topology.chapters.findIndex((c) => c.id === id);
-      reading = next === -1 ? null : next;
-      // Reduced motion gets the state, not the ease: the same rule the stills follow.
-      if (ctx.quality.reducedMotion) {
-        for (let i = 0; i < chapters; i++) heat[i] = reading === null || reading === i ? 1 : DIM;
-        paint();
-      }
-      ctx.invalidate();
-    },
     probe(point) {
       // Only a *changed* pointer needs frames. A pointer resting over the scene with every star
       // home is as idle as no pointer at all, and must not hold the loop awake.
@@ -305,7 +287,10 @@ export function createConstellation(ctx: SceneContext, centre: THREE.Vector3, sc
         probing = false;
         return;
       }
-      if (!probing || !probe.equals(point)) settled = false;
+      // The idle drift moves the camera every frame, so a still pointer's hit point creeps; a creep
+      // under PROBE_EPS is not a change, or a star under the pointer chases it at full rate forever.
+      if (probing && probe.distanceTo(point) < PROBE_EPS) return;
+      settled = false;
       probing = true;
       probe.copy(point);
     },
@@ -317,19 +302,9 @@ export function createConstellation(ctx: SceneContext, centre: THREE.Vector3, sc
         compose(1 + BREATH * Math.sin((2 * Math.PI * breath) / BREATH_S));
       }
 
-      let easing = false;
-      if (!ctx.quality.reducedMotion) {
-        for (let i = 0; i < chapters; i++) {
-          const to = reading === null || reading === i ? 1 : DIM;
-          if (heat[i] === to) continue;
-          heat[i] = to > heat[i] ? Math.min(to, heat[i] + dt / LIT_S) : Math.max(to, heat[i] - dt / LIT_S);
-          easing = true;
-        }
-        if (easing) paint();
-      }
-
       // Stars give way, then spring home. Skipped entirely once everything is at rest, so an idle
       // sky costs nothing beyond the breath above.
+      let easing = false;
       if (!ctx.quality.reducedMotion && !settled) {
         if (probing) at.copy(probe).applyMatrix4(toLocal.copy(group.matrix).invert());
         let moving = false;
@@ -345,13 +320,16 @@ export function createConstellation(ctx: SceneContext, centre: THREE.Vector3, sc
               (fx = dx * k), (fy = dy * k), (fz = dz * k);
             }
           }
+          // A star the pointer is pushing rests where the push meets the spring, not at home: once
+          // its velocity dies it is settled there, or a pointer parked on a star holds full rate forever.
+          const pushed = fx !== 0 || fy !== 0 || fz !== 0;
           for (let v = 0; v < 3; v++) {
             const j = o + v;
             const home = rest[j] - positions[j];
             velocity[j] = (velocity[j] + ([fx, fy, fz][v] + home * SPRING) * dt) * DAMP;
             positions[j] += velocity[j] * dt;
-            if (Math.abs(positions[j] - rest[j]) > REST_EPS || Math.abs(velocity[j]) > REST_EPS) moving = true;
-            else (positions[j] = rest[j]), (velocity[j] = 0);
+            if (Math.abs(velocity[j]) > REST_EPS || (!pushed && Math.abs(positions[j] - rest[j]) > REST_EPS)) moving = true;
+            else if (!pushed) (positions[j] = rest[j]), (velocity[j] = 0);
           }
         }
         starAttribute.needsUpdate = true;
