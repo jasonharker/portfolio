@@ -125,6 +125,17 @@ export function createNebula(ctx: SceneContext): LocalPlace {
   //  - Ridges. Taking 1 - |noise| keeps the thin zero-crossing sheets of the field and throws the
   //    bulk away, and a thin sheet seen edge-on is a filament. High power = thin, and empty
   //    between, so there are lanes to read the shape against.
+  const density = (x: number, y: number, z: number) => {
+    const yy = y / FLAT; // the cavity is spherical in the star's frame; the oblateness is a squash of it
+    const r = Math.hypot(x, yy, z) / RING;
+    if (r > SPAN) return 0;
+    // Narrow, and cut hard inside: a thin wall seen through is bright at the limb and empty in
+    // the middle, and that ring is the difference between a nebula and a fuzzy star.
+    const wall = Math.exp(-(((r - 0.78) / 0.13) ** 2)) + 0.05 * Math.exp(-(((r - 1.1) / 0.33) ** 2));
+    const cavity = THREE.MathUtils.smoothstep(r, 0.45, 0.68);
+    const f = fbm(x * 0.34, yy * 0.34, z * 0.34);
+    return wall * cavity * Math.max(0, 1 - Math.abs(1.05 * f)) ** 4;
+  };
   // Both are in the star's frame, where the cavity is spherical; the oblateness is a squash of it.
   // The wall, per unit radius (so with its r²): narrow, and cut hard inside — a thin wall seen
   // through is bright at the limb and empty in the middle, and that ring is the difference between
