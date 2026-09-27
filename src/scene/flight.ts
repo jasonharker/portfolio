@@ -24,6 +24,12 @@ const mix = (a: Vec3, b: Vec3, k: number) => a.map((v, i) => v + (b[i] - v) * k)
 const sub = (a: Vec3, b: Vec3) => a.map((v, i) => v - b[i]) as Vec3;
 const len = (a: Vec3) => Math.hypot(...a);
 const scale = (a: Vec3, k: number) => a.map((v) => v * k) as Vec3;
+const dot = (a: Vec3, b: Vec3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const unit = (a: Vec3) => scale(a, 1 / len(a));
+/** `u` made square to the unit view axis `d`: the screen up a camera looking along `d` can have. */
+const square = (u: Vec3, d: Vec3) => unit(sub(u, scale(d, dot(u, d))));
+/** A pose's screen up, given its unit axis from target to camera: its own, or world Y as lookAt makes it. */
+const upOf = (p: CameraPose, d: Vec3) => p.up ?? square([0, 1, 0], d);
 const same = (a: CameraPose, b: CameraPose) => [...a.position, ...a.target].every((v, i) => Math.abs(v - [...b.position, ...b.target][i]) < 1e-9);
 
 /** Shortest-arc interpolation between two unit vectors; falls back to a lerp when they're close. */
@@ -49,6 +55,9 @@ export function createFlight(stage: Stage): Director {
   // The dolly, precomputed at the start: view direction and log-distance at each end, and the middle
   // control point of the quadratic through them.
   let dir0: Vec3, dir1: Vec3, l0 = 0, l1 = 0, lc = 0;
+  // Screen up at each end, when either end sets its own (resume's overhead). The roll turns across
+  // the whole flight; left to lookAt it held still and then swung ~40° in the last few frames.
+  let turn: [Vec3, Vec3] | null = null;
   let dest: PlaceId | null = null;
   let opened = false; // the push-in the site opens with has been spent
   let gen = 0; // bumps on every request, so a load that resolves late can't act on a stale one
@@ -83,6 +92,8 @@ export function createFlight(stage: Stage): Director {
     dir0 = dir1 = scale(sub(to.position, to.target), 1 / r);
     from = { position: to.target.map((v, i) => v + dir0[i] * r * OPEN_BACK) as Vec3, target: to.target, fov: to.fov };
     [l0, l1, lc] = [Math.log(r * OPEN_BACK), Math.log(r), Math.log(r * (OPEN_BACK + 1)) - Math.log(2)];
+    turn = to.up ? [to.up, to.up] : null; // a push-in along one axis doesn't roll
+    from.up = to.up;
     dest = place;
     dur = OPEN_DUR;
     t = 0;
@@ -104,6 +115,7 @@ export function createFlight(stage: Stage): Director {
     dir0 = scale(sub(from.position, from.target), 1 / (l0 = len(sub(from.position, from.target))));
     dir1 = scale(sub(to.position, to.target), 1 / (l1 = len(sub(to.position, to.target))));
     [l0, l1] = [Math.log(l0), Math.log(l1)];
+    turn = from.up || to.up ? [upOf(from, dir0), upOf(to, dir1)] : null;
     // A move that stays inside the place — a second click on the same page, a resize — has nowhere
     // to climb to: run it straight and short. Otherwise arc out so that at the halfway point the
     // whole disc is in frame, which is what a quadratic through log(CRUISE) at k = 0.5 gives.
@@ -139,7 +151,8 @@ export function createFlight(stage: Stage): Director {
       const r = Math.exp((1 - k) * (1 - k) * l0 + 2 * (1 - k) * k * lc + k * k * l1);
       const dir = slerp(dir0, dir1, k);
       level(r);
-      stage.pose({ position: target.map((v, i) => v + dir[i] * r) as Vec3, target, fov: from.fov + (to.fov - from.fov) * k });
+      const up = turn ? square(slerp(turn[0], turn[1], k), dir) : undefined;
+      stage.pose({ position: target.map((v, i) => v + dir[i] * r) as Vec3, target, fov: from.fov + (to.fov - from.fov) * k, up });
       return true;
     },
   };

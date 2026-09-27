@@ -34,7 +34,13 @@ export interface Quality {
  * one continuous move rather than a cut between tiers whose poses can't be compared. A place's own
  * units reach it through its group's scale (see LocalPlace). Tiers set their near/far in render().
  */
-export interface CameraPose { position: Vec3; target: Vec3; fov: number }
+export interface CameraPose {
+  position: Vec3;
+  target: Vec3;
+  fov: number;
+  /** Screen up. Absent means world Y, square to the view; a view straight down has no such up and must say. */
+  up?: Vec3;
+}
 
 export interface SceneContext {
   renderer: THREE.WebGLRenderer;

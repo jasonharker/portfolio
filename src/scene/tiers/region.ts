@@ -195,7 +195,8 @@ function base(place: PlaceId) {
 /**
  * Resume: the whole disc from straight above, the face-on view M74 is famous for. It is far past
  * CROSSOVER, so the flight hands it to the Galaxy tier; it lives here only because every place is
- * framed here. The camera sits a hair toward +z so lookAt keeps +x as screen right.
+ * framed here. Straight down there is no horizon, so the pose names its own screen up: -z, which
+ * keeps +x screen right.
  */
 function overhead(aspect: number): CameraPose {
   const tan = Math.tan(THREE.MathUtils.degToRad(FOV / 2));
@@ -205,7 +206,7 @@ function overhead(aspect: number): CameraPose {
   // Screen right is +x and screen up is -z: wide screens push the disc right of the wide CV,
   // portrait ones push it up above the bottom sheet.
   const [tx, tz] = aspect >= 1 ? [-OVERHEAD_SHIFT * half * aspect, 0] : [0, OVERHEAD_SHIFT * half];
-  return { position: [tx, d, tz + d * 1e-3], target: [tx, 0, tz], fov: FOV };
+  return { position: [tx, d, tz], target: [tx, 0, tz], fov: FOV, up: [0, 0, -1] };
 }
 
 function track<T extends { dispose(): void }>(d: T): T {

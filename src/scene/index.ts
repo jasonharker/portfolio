@@ -81,7 +81,8 @@ export function start(canvas: HTMLCanvasElement, gl: WebGL2RenderingContext, lab
       PARALLAX * at[1] + DRIFT * 0.6 * Math.sin((2 * Math.PI * drift) / DRIFT_S[1]),
     ];
     swayed = Math.hypot(sx, sy);
-    camera.up.copy(Y);
+    if (pose.up) camera.up.set(...pose.up);
+    else camera.up.copy(Y);
     if (swayed) {
       camera.position.copy(eye);
       camera.lookAt(look); // the view basis to shift along
