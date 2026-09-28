@@ -1,6 +1,7 @@
 // Jenkinsfile for portfolio — builds, scans, and deploys to STAGING only.
 // Production is promoted by a PR in thales-kubernetes copying the tag that
-// passed Flagger's blue/green analysis in portfolio-staging (CICD-02).
+// passed Flagger's blue/green analysis in portfolio-staging (CICD-02); the same analysis
+// then runs again in production.
 //
 // Every branch and PR builds and scans. Only main pushes the image and stages it, and the
 // push comes after the scan, so an image that fails Trivy never reaches the registry.
