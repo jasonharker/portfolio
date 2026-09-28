@@ -21,6 +21,9 @@ const DEPTH = 0.62;
 // How large a figure is drawn relative to the spacing between figures. Authored star coordinates
 // keep a shape legible on their own; this is the one knob for how much sky each chapter takes.
 const FIGURE = 1.35;
+// How far apart the figures stand, relative to where topology.yaml authors them. Under 1 draws them
+// in about the sky's centre without touching the authored shapes.
+const SPREAD = 0.6;
 const TRAVEL = 0.3; // the line of travel between figures, relative to a chapter's own links
 const CHAPTER_TOKENS = ['--chapter-1', '--chapter-2', '--chapter-3', '--chapter-4'];
 
@@ -53,8 +56,8 @@ export function layout(topology: Topology): { chapter: number; id: string; p: TH
         chapter: ci,
         id: c.id,
         p: new THREE.Vector3(
-          THREE.MathUtils.clamp(c.at[0] + x * FIGURE, -HALF_W, HALF_W),
-          THREE.MathUtils.clamp(c.at[1] + y * FIGURE, -HALF_H, HALF_H),
+          THREE.MathUtils.clamp(c.at[0] * SPREAD + x * FIGURE, -HALF_W, HALF_W),
+          THREE.MathUtils.clamp(c.at[1] * SPREAD + y * FIGURE, -HALF_H, HALF_H),
           (w - 0.5) * 2 * DEPTH,
         ),
       });

@@ -376,8 +376,8 @@ export const region: Tier = {
     const half = distance * tan;
     // Right of centre. A place is read with the column opened on demand over the scene, so it needs
     // only enough to clear the rail; the landing essay holds the column open the whole time it is
-    // read, so its sky is pushed clear of the text entirely.
-    const shift = place === 'constellation' ? 0.72 : 0.14;
+    // read, so its sky is pushed well right, though on a narrow desktop its left figures sit behind the text.
+    const shift = place === 'constellation' ? 0.35 : 0.14;
     const pan = aspect >= 1
       ? right.multiplyScalar(-shift * half * aspect).addScaledVector(up, 0.08 * half)
       : up.multiplyScalar(-0.4 * half);
