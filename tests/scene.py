@@ -284,7 +284,7 @@ def main():
         st = pg.evaluate('({reading: __scene.reading, tier: __scene.tier})')
         check('place: the constellation reads no object', st == {'reading': None, 'tier': 'region'}, str(st))
 
-        # Drag to orbit (landing only). The sky right of the column orbits and stays put on release;
+        # Drag to orbit, on every page. The sky right of the column orbits and stays put on release;
         # a drag that starts on the words does nothing; navigating away brings the camera home.
         vw, vh = pg.viewport_size['width'], pg.viewport_size['height']
         pg.mouse.move(vw * 0.1, vh * 0.5)
@@ -306,6 +306,12 @@ def main():
         wait(pg, "__scene.path === '/gitops/'")
         settle(pg)
         check('orbit: navigating away brings the camera home', pg.evaluate('__scene.orbit') == 0, str(pg.evaluate('__scene.orbit')))
+        pg.mouse.move(vw * 0.85, vh * 0.5)
+        pg.mouse.down()
+        pg.mouse.move(vw * 0.85 - 120, vh * 0.5 + 40, steps=6)
+        pg.mouse.up()
+        settle(pg)
+        check('orbit: a drag orbits a place too, and is not a click', pg.evaluate('__scene.orbit') > 0.2 and pg.evaluate('__scene.path') == '/gitops/', str(pg.evaluate('[__scene.orbit, __scene.path]')))
         pg.click('a.wordmark')
         wait(pg, "__scene.path === '/'")
         settle(pg)

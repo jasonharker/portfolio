@@ -21,11 +21,12 @@ const PARALLAX_W = 10; // critically damped spring, rad/s: settles in ~0.6 s
 // pass on every ambient frame (30/s) where a still camera could skip it; 0 turns it off.
 const DRIFT = 0.01;
 const DRIFT_S: [number, number] = [31, 23]; // periods of the lateral and vertical swing
-// Drag to orbit, landing page only: radians per CSS pixel, and how far either way. The clamp keeps
-// the constellation's plate from turning edge-on. Unlike the parallax it stays where it is let go,
-// and eases home on the next navigation or Esc.
-const ORBIT_PX = 0.004;
-const ORBIT_MAX = [0.6, 0.3]; // yaw, pitch
+// Drag to orbit, on every page: radians per CSS pixel, and how far either way. Yaw goes half a turn,
+// round the back of whatever is framed; pitch stops short of the pole. Unlike the parallax it stays
+// where it is let go, and eases home on the next navigation or Esc.
+const ORBIT_PX = 0.005;
+const ORBIT_MAX = [Math.PI, 1.3]; // yaw, pitch
+const CLICK_PX = 4; // a drag shorter than this is still a click (a planet in the orrery)
 
 export function start(canvas: HTMLCanvasElement, gl: WebGL2RenderingContext, labels: HTMLElement): Scene {
   const renderer = new THREE.WebGLRenderer({ canvas, context: gl });
@@ -50,7 +51,7 @@ export function start(canvas: HTMLCanvasElement, gl: WebGL2RenderingContext, lab
   const goal = [0, 0, 0, 0], at = [0, 0, 0, 0], vel = [0, 0, 0, 0];
   let drift = 0; // seconds of rendered frames
   let swayed = 0; // camera offset from the pose position / view distance, for __scene
-  const [eye, look, right, up, arm] = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+  const [eye, look, right, up, arm, axis] = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
   const Y = new THREE.Vector3(0, 1, 0);
   const ease = (dt: number) => {
     let moving = false;
@@ -68,11 +69,19 @@ export function start(canvas: HTMLCanvasElement, gl: WebGL2RenderingContext, lab
   function aim() {
     eye.set(...pose.position);
     look.set(...pose.target);
-    // Orbit first, about the target: yaw about the disc's axis, pitch about the view's horizontal.
+    // Orbit first, about the target: yaw about the pose's up (the disc's axis unless the pose names
+    // its own, as resume's overhead does), pitch about the view's horizontal. The up turns with the
+    // arm, so a steep pitch never meets the pole and flips.
+    if (pose.up) camera.up.set(...pose.up);
+    else camera.up.copy(Y);
     if (at[2] || at[3]) {
       arm.subVectors(eye, look);
-      right.crossVectors(Y, arm).normalize();
-      arm.applyAxisAngle(right, -at[3]).applyAxisAngle(Y, -at[2]);
+      right.crossVectors(camera.up, arm).normalize();
+      arm.applyAxisAngle(right, -at[3]);
+      camera.up.applyAxisAngle(right, -at[3]);
+      axis.set(...(pose.up ?? [0, 1, 0]));
+      arm.applyAxisAngle(axis, -at[2]);
+      camera.up.applyAxisAngle(axis, -at[2]);
       eye.addVectors(look, arm);
     }
     const dist = eye.distanceTo(look);
@@ -81,8 +90,6 @@ export function start(canvas: HTMLCanvasElement, gl: WebGL2RenderingContext, lab
       PARALLAX * at[1] + DRIFT * 0.6 * Math.sin((2 * Math.PI * drift) / DRIFT_S[1]),
     ];
     swayed = Math.hypot(sx, sy);
-    if (pose.up) camera.up.set(...pose.up);
-    else camera.up.copy(Y);
     if (swayed) {
       camera.position.copy(eye);
       camera.lookAt(look); // the view basis to shift along
@@ -179,18 +186,22 @@ export function start(canvas: HTMLCanvasElement, gl: WebGL2RenderingContext, lab
     if (!sway) (at[2] = goal[2]), (at[3] = goal[3]);
     loop.invalidate();
   };
-  // Drag on the landing sky, mouse or pen. Touch is left alone: on a phone a drag is the sheet's scroll.
+  // Drag on the sky, mouse or pen. Touch is left alone: on a phone a drag is the sheet's scroll.
   let drag: { x: number; y: number; yaw: number; pitch: number } | null = null;
+  let dragged = false; // the last press moved past CLICK_PX, so its click is not a click
   const root = document.documentElement;
   addEventListener('pointerdown', (e) => {
-    if (e.pointerType === 'touch' || e.button !== 0 || debug.place !== 'constellation') return;
+    if (e.pointerType === 'touch' || e.button !== 0) return;
     if ((e.target as Element).closest?.('.column, .masthead')) return;
     e.preventDefault(); // no text selection
     drag = { x: e.clientX, y: e.clientY, yaw: goal[2], pitch: goal[3] };
+    dragged = false;
     root.toggleAttribute('data-dragging', true);
   });
   addEventListener('pointermove', (e) => {
-    if (drag) orbit(drag.yaw + (e.clientX - drag.x) * ORBIT_PX, drag.pitch + (e.clientY - drag.y) * ORBIT_PX);
+    if (!drag) return;
+    dragged ||= Math.hypot(e.clientX - drag.x, e.clientY - drag.y) > CLICK_PX;
+    orbit(drag.yaw + (e.clientX - drag.x) * ORBIT_PX, drag.pitch + (e.clientY - drag.y) * ORBIT_PX);
   }, { passive: true });
   const release = () => ((drag = null), root.toggleAttribute('data-dragging', false));
   addEventListener('pointerup', release);
@@ -238,7 +249,7 @@ export function start(canvas: HTMLCanvasElement, gl: WebGL2RenderingContext, lab
   // aria-hidden, so this is a mouse shortcut for a link that also exists in the prose, never the
   // only way to reach the page.
   canvas.addEventListener('click', () => {
-    const href = active?.href?.();
+    const href = !dragged && active?.href?.();
     if (href) navigate(href);
   });
   document.addEventListener('keydown', (e) => e.key === 'Escape' && scene.skip());
