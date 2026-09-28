@@ -91,6 +91,8 @@ spec:
         stage('Vulnerability Scan') {
             steps {
                 container('trivy') {
+                    // Policy gate: Trivy's misconfiguration checks on the Dockerfile.
+                    sh 'trivy config --severity HIGH,CRITICAL --exit-code 1 Dockerfile'
                     sh 'trivy image --input image.tar --format json -o trivy-report.json'
                     archiveArtifacts artifacts: 'trivy-report.json', allowEmptyArchive: true
                     sh 'trivy image --input image.tar --severity CRITICAL --exit-code 1'
@@ -110,10 +112,10 @@ spec:
         stage('Deploy to Staging') {
             when { branch 'main' }
             steps {
-                container('git') {
-                    withCredentials([sshUserPrivateKey(credentialsId: 'github-ssh-deploy-key', keyFileVariable: 'SSH_KEY')]) {
-                        script {
-                            def shortCommit = GIT_COMMIT.take(8)
+                withCredentials([sshUserPrivateKey(credentialsId: 'github-ssh-deploy-key', keyFileVariable: 'SSH_KEY')]) {
+                    script {
+                        def shortCommit = GIT_COMMIT.take(8)
+                        container('git') {
                             sh """
                                 git config --global user.email "jenkins@thales.local"
                                 git config --global user.name "Jenkins CI"
@@ -126,6 +128,16 @@ spec:
                                 cd k8s-manifests
                                 sed -i 's|image: .* # portfolio-image\$|image: ${REGISTRY}/${IMAGE_NAME}:${shortCommit} # portfolio-image|' ${MANIFEST_FILE}
                                 git diff ${MANIFEST_FILE}
+                            """
+                        }
+                        // Policy gate on the staging manifests as they will be applied, before the
+                        // commit Flux acts on.
+                        container('trivy') {
+                            sh "trivy config --severity HIGH,CRITICAL --exit-code 1 k8s-manifests/\$(dirname ${MANIFEST_FILE})"
+                        }
+                        container('git') {
+                            sh """
+                                cd k8s-manifests
                                 git add ${MANIFEST_FILE}
                                 git commit -m "🚀 Stage ${IMAGE_NAME}:${shortCommit} (build #${BUILD_NUMBER})" || echo "No changes to commit"
                                 git push origin main
