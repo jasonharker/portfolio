@@ -47,7 +47,7 @@ const FRAMED = 19.5;
 const MODULES: { id: string; name: string; note: string; lamp: number; at: Vec3 }[] = [
   { id: 'build', name: 'Build', note: 'Compile and unit test', lamp: 0, at: [HULL_R * 0.62 + 0.42, -0.12, BAY_Z[0]] },
   { id: 'scan', name: 'Scan', note: 'Image and policy gate', lamp: 1, at: [HULL_R * 0.62 + 0.42, -0.12, BAY_Z[1]] },
-  { id: 'publish', name: 'Publish', note: 'Signed image to the registry', lamp: 2, at: [HULL_R * 0.62 + 0.42, -0.12, BAY_Z[2]] },
+  { id: 'publish', name: 'Publish', note: 'Scanned image to the lab registry', lamp: 2, at: [HULL_R * 0.62 + 0.42, -0.12, BAY_Z[2]] },
   { id: 'deploy', name: 'Deploy', note: 'Reconciled onto the cluster', lamp: 3, at: [HULL_R * 0.62 + 0.42, -0.12, BAY_Z[3]] },
   { id: 'control', name: 'Control', note: 'Where a release is approved', lamp: BRIDGE, at: [0.85, 0.42, 5.85] },
   { id: 'promote', name: 'Promote', note: 'Progressive delivery to production', lamp: ENGINES, at: [0, 0, -6.4] },

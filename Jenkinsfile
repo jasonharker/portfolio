@@ -1,6 +1,9 @@
 // Jenkinsfile for portfolio — builds, scans, and deploys to STAGING only.
 // Production is promoted by a PR in thales-kubernetes copying the tag that
 // passed Flagger's blue/green analysis in portfolio-staging (CICD-02).
+//
+// Every branch and PR builds and scans. Only main pushes the image and stages it, and the
+// push comes after the scan, so an image that fails Trivy never reaches the registry.
 
 pipeline {
     agent {
@@ -32,6 +35,12 @@ spec:
     - sleep
     args:
     - 99d
+  - name: crane
+    image: gcr.io/go-containerregistry/crane:debug@sha256:e78770b31258a3846f878036d9c1f63fbe4c871f9f56990bf77fd95c013e3c1b
+    command:
+    - sleep
+    args:
+    - 99d
 """
         }
     }
@@ -45,7 +54,6 @@ spec:
 
     stages {
         stage('Build Image') {
-            when { branch 'main' }
             steps {
                 script {
                     def shortCommit = GIT_COMMIT.take(8)
@@ -67,6 +75,8 @@ spec:
                                 --context=\$(pwd) \\
                                 --dockerfile=Dockerfile \\
                                 --destination=${REGISTRY}/${IMAGE_NAME}:${shortCommit} \\
+                                --no-push \\
+                                --tar-path=image.tar \\
                                 --build-arg=TOPOLOGY_DATE=${topologyDate} \\
                                 --insecure \\
                                 --skip-tls-verify \\
@@ -79,15 +89,20 @@ spec:
         }
 
         stage('Vulnerability Scan') {
-            when { branch 'main' }
             steps {
                 container('trivy') {
-                    script {
-                        def shortCommit = GIT_COMMIT.take(8)
-                        sh "trivy image --insecure --format json -o trivy-report.json ${REGISTRY}/${IMAGE_NAME}:${shortCommit}"
-                        archiveArtifacts artifacts: 'trivy-report.json', allowEmptyArchive: true
-                        sh "trivy image --insecure --severity CRITICAL --exit-code 1 ${REGISTRY}/${IMAGE_NAME}:${shortCommit}"
-                    }
+                    sh 'trivy image --input image.tar --format json -o trivy-report.json'
+                    archiveArtifacts artifacts: 'trivy-report.json', allowEmptyArchive: true
+                    sh 'trivy image --input image.tar --severity CRITICAL --exit-code 1'
+                }
+            }
+        }
+
+        stage('Publish Image') {
+            when { branch 'main' }
+            steps {
+                container('crane') {
+                    sh "crane push --insecure image.tar ${REGISTRY}/${IMAGE_NAME}:${GIT_COMMIT.take(8)}"
                 }
             }
         }
@@ -124,7 +139,11 @@ spec:
 
     post {
         success {
-            echo "Staged ${IMAGE_NAME}:${GIT_COMMIT.take(8)} — watch: kubectl -n portfolio-staging get canary portfolio -w"
+            script {
+                if (env.BRANCH_NAME == 'main') {
+                    echo "Staged ${IMAGE_NAME}:${GIT_COMMIT.take(8)} — watch: kubectl -n portfolio-staging get canary portfolio -w"
+                }
+            }
         }
     }
 }
