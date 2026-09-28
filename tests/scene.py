@@ -244,7 +244,7 @@ def main():
                   st['same'] and st['noReload'] and st['lost'] == 0 and st['connected'] and st['frames'] > f0, f'{st} from {f0}')
 
         nav('nav a[href="/incidents/"]', '/incidents/')
-        nav('.list a[href="/incidents/lorem-ipsum-dolor/"]', '/incidents/lorem-ipsum-dolor/')
+        nav('.list a[href="/incidents/cilium-mtu/"]', '/incidents/cilium-mtu/')
         nav('nav a[href="/gitops/"]', '/gitops/')
         nav('nav a[href="/documentation/"]', '/documentation/')
         nav('nav a[href="/resume/"]', '/resume/')
@@ -361,12 +361,12 @@ def main():
 
         # Deep link: already at the destination.
         dl = watch(br.new_page(), 'deeplink')
-        dl.goto(B + '/incidents/lorem-ipsum-dolor/')
+        dl.goto(B + '/incidents/cilium-mtu/')
         scene_up(dl)
         flew = sample_flying(dl, 1.5)
         st = dl.evaluate('({instantAt: __scene.instantAt, flights: __scene.flights.length, place: __scene.place})')
         check('deep link opens at destination, no flight',
-              st == {'instantAt': '/incidents/lorem-ipsum-dolor/', 'flights': 0, 'place': 'incidents'} and not flew, str(st))
+              st == {'instantAt': '/incidents/cilium-mtu/', 'flights': 0, 'place': 'incidents'} and not flew, str(st))
         # The distance matters as much as the place: land() used to frame every destination from a
         # tenth of the disc away, which showed an incident as a marker rather than as the orrery.
         check('deep link lands at the object, not out in the arm', dl.evaluate("__scene.reading === 'incidents'"), dl.evaluate('__scene.reading'))
