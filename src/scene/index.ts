@@ -26,6 +26,7 @@ const DRIFT_S: [number, number] = [31, 23]; // periods of the lateral and vertic
 // where it is let go, and eases home on the next navigation or Esc.
 const ORBIT_PX = 0.005;
 const ORBIT_MAX = [Math.PI, 1.3]; // yaw, pitch
+const FLOOR = Math.sin(0.1); // the eye stays 0.1 rad above the disc plane: nothing is seen from underneath
 const CLICK_PX = 4; // a drag shorter than this is still a click (a planet in the orrery)
 
 export function start(canvas: HTMLCanvasElement, gl: WebGL2RenderingContext, labels: HTMLElement): Scene {
@@ -52,6 +53,7 @@ export function start(canvas: HTMLCanvasElement, gl: WebGL2RenderingContext, lab
   let drift = 0; // seconds of rendered frames
   let swayed = 0; // camera offset from the pose position / view distance, for __scene
   const [eye, look, right, up, arm, axis] = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+  const [probe, probeUp] = [new THREE.Vector3(), new THREE.Vector3()];
   const Y = new THREE.Vector3(0, 1, 0);
   const ease = (dt: number) => {
     let moving = false;
@@ -65,25 +67,28 @@ export function start(canvas: HTMLCanvasElement, gl: WebGL2RenderingContext, lab
     }
     return moving;
   };
+  // The pose's arm (target to eye) and up, orbited about the target: yaw about the pose's up (the
+  // disc's axis unless the pose names its own, as resume's overhead does), pitch about the view's
+  // horizontal. The up turns with the arm, so a steep pitch never meets the pole and flips.
+  function swing(yaw: number, pitch: number, arm: THREE.Vector3, up: THREE.Vector3) {
+    arm.set(...pose.position).sub(axis.set(...pose.target));
+    if (pose.up) up.set(...pose.up);
+    else up.copy(Y);
+    right.crossVectors(up, arm).normalize();
+    arm.applyAxisAngle(right, -pitch);
+    up.applyAxisAngle(right, -pitch);
+    axis.set(...(pose.up ?? [0, 1, 0]));
+    arm.applyAxisAngle(axis, -yaw);
+    up.applyAxisAngle(axis, -yaw);
+  }
+  // Sine of the eye's elevation above the disc plane through the target, under an orbit.
+  const height = (yaw: number, pitch: number) => (swing(yaw, pitch, probe, probeUp), probe.y / probe.length());
+
   // Pose plus sway into the camera. Called on every rendered frame, and whenever the pose changes.
   function aim() {
-    eye.set(...pose.position);
     look.set(...pose.target);
-    // Orbit first, about the target: yaw about the pose's up (the disc's axis unless the pose names
-    // its own, as resume's overhead does), pitch about the view's horizontal. The up turns with the
-    // arm, so a steep pitch never meets the pole and flips.
-    if (pose.up) camera.up.set(...pose.up);
-    else camera.up.copy(Y);
-    if (at[2] || at[3]) {
-      arm.subVectors(eye, look);
-      right.crossVectors(camera.up, arm).normalize();
-      arm.applyAxisAngle(right, -at[3]);
-      camera.up.applyAxisAngle(right, -at[3]);
-      axis.set(...(pose.up ?? [0, 1, 0]));
-      arm.applyAxisAngle(axis, -at[2]);
-      camera.up.applyAxisAngle(axis, -at[2]);
-      eye.addVectors(look, arm);
-    }
+    swing(at[2], at[3], arm, camera.up); // orbit first
+    eye.addVectors(look, arm);
     const dist = eye.distanceTo(look);
     const [sx, sy] = [
       PARALLAX * at[0] + DRIFT * Math.sin((2 * Math.PI * drift) / DRIFT_S[0]),
@@ -142,6 +147,7 @@ export function start(canvas: HTMLCanvasElement, gl: WebGL2RenderingContext, lab
     get paused() { return loop.paused; },
     get parallax() { return Math.hypot(at[0], at[1]); },
     get orbit() { return Math.hypot(at[2], at[3]); },
+    get height() { return height(at[2], at[3]); },
     get sway() { return swayed; },
     get hoverable() { return !!active?.hot; },
   };
@@ -180,9 +186,19 @@ export function start(canvas: HTMLCanvasElement, gl: WebGL2RenderingContext, lab
 
   // Orbit goal, clamped. Under reduced motion there is no spring, so the camera goes straight there:
   // a drag is the viewer's own hand, not animation.
+  // Never under the disc: a step that takes the eye below FLOOR is refused, each axis on its own so
+  // a drag along the floor still slides. Only steps down are refused, so a pose already below it
+  // (mid-flight) can always ease home.
+  const sinks = (yaw: number, pitch: number) => {
+    const h = height(yaw, pitch);
+    return h < FLOOR && h < height(goal[2], goal[3]);
+  };
   const orbit = (yaw: number, pitch: number) => {
-    goal[2] = THREE.MathUtils.clamp(yaw, -ORBIT_MAX[0], ORBIT_MAX[0]);
-    goal[3] = THREE.MathUtils.clamp(pitch, -ORBIT_MAX[1], ORBIT_MAX[1]);
+    yaw = THREE.MathUtils.clamp(yaw, -ORBIT_MAX[0], ORBIT_MAX[0]);
+    pitch = THREE.MathUtils.clamp(pitch, -ORBIT_MAX[1], ORBIT_MAX[1]);
+    if (sinks(yaw, goal[3])) yaw = goal[2];
+    if (sinks(yaw, pitch)) pitch = goal[3];
+    (goal[2] = yaw), (goal[3] = pitch);
     if (!sway) (at[2] = goal[2]), (at[3] = goal[3]);
     loop.invalidate();
   };

@@ -151,6 +151,7 @@ export interface SceneDebug {
   paused: boolean;
   parallax: number; // eased mouse offset, 0 at rest, up to ~1.4 in a viewport corner
   orbit: number; // eased drag orbit on the landing page, radians; stays where the drag left it
+  height: number; // sine of the eye's elevation above the disc plane, orbit included; never below sin(0.1)
   sway: number; // camera offset from the director's pose, as a fraction of view distance (parallax + drift)
   hoverable: boolean; // the active tier implements hot()
 }
