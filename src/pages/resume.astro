@@ -1,9 +1,9 @@
 ---
 import Base from '../layouts/Base.astro';
 
-// Titles, employers and dates as on Jason's LinkedIn.
+// Titles, employers and dates as on Jason's LinkedIn; the paper title leads, the working title follows in parentheses.
 const experience = [
-  { role: 'Sportsbook Deployment Engineer', org: 'Circa Resort & Casino', when: 'Jun 2026 – Present', points: ['Run the AKS clusters behind Circa\'s mobile sports-betting app, deployed through Flux and Helm, with separate staging and production branches.', 'Moved RabbitMQ onto zone-redundant storage in staging, after disks pinned to one zone broke the cluster during node upgrades.', 'Building New Relic alerting for failed pods and failed deployments.'] },
+  { role: 'Sportsbook Deployment Engineer (Cloud Engineer)', org: 'Circa Resort & Casino', when: 'Jun 2026 – Present', points: ['Run the AKS clusters behind Circa\'s mobile sports-betting app, deployed through Flux and Helm, with separate staging and production branches.', 'Moved RabbitMQ onto zone-redundant storage in staging, after disks pinned to one zone broke the cluster during node upgrades.', 'Building New Relic alerting for failed pods and failed deployments.'] },
   { role: 'IT System Administrator', org: 'Circa Resort & Casino', when: 'Apr 2025 – Jun 2026', points: [] },
   { role: 'IT Help Desk Technician', org: 'Circa Resort & Casino', when: 'Mar 2024 – Apr 2025', points: ['Supported the resort\'s Oracle Simphony point-of-sale and Opera property management systems.'] },
   { role: 'Veterinary Assistant', org: 'Creature Comforts Animal Hospital', when: 'Mar 2022 – Dec 2023', points: [] },
@@ -19,7 +19,7 @@ const certifications = [
 ---
 <Base title="Resume" bodyClass="resume">
   <h1>Jason Harker</h1>
-  <p class="dek">Sportsbook deployment engineer at Circa in Las Vegas, running Kubernetes on Azure at work and on my own hardware at home.</p>
+  <p class="dek">Cloud engineer at Circa in Las Vegas, running Kubernetes on Azure at work and on my own hardware at home.</p>
   <div class="cv">
     <h2>Summary</h2>
     <section>
