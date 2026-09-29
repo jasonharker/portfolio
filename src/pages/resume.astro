@@ -1,20 +1,29 @@
 ---
 import Base from '../layouts/Base.astro';
 
-// Lorem values until Jason supplies employers, titles and dates (spec §7).
+// Titles, employers and dates as on Jason's LinkedIn.
 const experience = [
-  { role: 'Lorem ipsum dolor', org: 'Consectetur adipiscing', when: 'Lorem ipsum — dolor', points: ['Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.', 'Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris.', 'Duis aute irure dolor in reprehenderit in voluptate velit esse.'] },
-  { role: 'Sed ut perspiciatis', org: 'Unde omnis iste', when: 'Natus error — sit voluptatem', points: ['Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit.', 'Neque porro quisquam est, qui dolorem ipsum quia dolor sit amet.'] },
-  { role: 'At vero eos', org: 'Accusamus et iusto', when: 'Odio dignissimos — ducimus', points: ['Temporibus autem quibusdam et aut officiis debitis aut rerum necessitatibus.'] },
+  { role: 'Sportsbook Deployment Engineer', org: 'Circa Resort & Casino', when: 'Jun 2026 – Present', points: ['Run the AKS clusters behind Circa\'s mobile sports-betting app, deployed through Flux and Helm, with separate staging and production branches.', 'Moved RabbitMQ onto zone-redundant storage in staging, after disks pinned to one zone broke the cluster during node upgrades.', 'Building New Relic alerting for failed pods and failed deployments.'] },
+  { role: 'IT System Administrator', org: 'Circa Resort & Casino', when: 'Apr 2025 – Jun 2026', points: [] },
+  { role: 'IT Help Desk Technician', org: 'Circa Resort & Casino', when: 'Mar 2024 – Apr 2025', points: ['Supported the resort\'s Oracle Simphony point-of-sale and Opera property management systems.'] },
+  { role: 'Veterinary Assistant', org: 'Creature Comforts Animal Hospital', when: 'Mar 2022 – Dec 2023', points: [] },
+];
+
+const certifications = [
+  'CompTIA Security+ (May 2026)',
+  'CompTIA Secure Infrastructure Specialist (May 2026)',
+  'CompTIA Network+ (Feb 2026)',
+  'CompTIA IT Operations Specialist (Feb 2026)',
+  'CompTIA A+ (Jan 2024)',
 ];
 ---
 <Base title="Resume" bodyClass="resume">
   <h1>Jason Harker</h1>
-  <p class="dek">Lorem ipsum dolor sit amet, consectetur adipiscing elit.</p>
+  <p class="dek">Sportsbook deployment engineer at Circa in Las Vegas, running Kubernetes on Azure at work and on my own hardware at home.</p>
   <div class="cv">
-    <h2>Lorem ipsum</h2>
+    <h2>Summary</h2>
     <section>
-      <p>Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo.</p>
+      <p>I deploy and operate the Kubernetes platform behind Circa's mobile sportsbook on Azure. At home I run THALES, a private cloud on Proxmox and Ceph with a Talos Kubernetes cluster managed through Flux, and this site documents it. I came to IT from veterinary medicine and a philosophy degree.</p>
     </section>
 
     <h2>Experience</h2>
@@ -23,21 +32,28 @@ const experience = [
         <div class="entry">
           <h3>{e.role}, {e.org}</h3>
           <p class="when">{e.when}</p>
-          <ul>{e.points.map((p) => <li>{p}</li>)}</ul>
+          {e.points.length > 0 && <ul>{e.points.map((p) => <li>{p}</li>)}</ul>}
         </div>
       ))}
     </section>
 
+    <h2>Education</h2>
+    <section>
+      <div class="entry">
+        <h3>BA, Philosophy, University of Nevada, Las Vegas</h3>
+        <p class="when">2016 – 2020</p>
+        <p>Cum laude. Phi Sigma Tau.</p>
+      </div>
+    </section>
+
     <h2>Certifications</h2>
     <section>
-      <p>Lorem ipsum dolor</p>
-      <p>Sit amet consectetur</p>
-      <p>Adipiscing elit sed</p>
+      {certifications.map((c) => <p>{c}</p>)}
     </section>
 
     <h2>Skills</h2>
     <section>
-      <p>Lorem ipsum, dolor sit, amet consectetur, adipiscing elit, sed do eiusmod, tempor incididunt.</p>
+      <p>Kubernetes, Talos Linux, Flux CD, Helm, Cilium, Azure Kubernetes Service, Proxmox, Ceph, HashiCorp Vault, External Secrets Operator, Prometheus, Grafana, Loki, New Relic, Jenkins, Terraform, Ansible, Python, Linux, Active Directory, pfSense.</p>
     </section>
   </div>
 </Base>
