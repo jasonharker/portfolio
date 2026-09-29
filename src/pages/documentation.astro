@@ -2,13 +2,16 @@
 import Base from '../layouts/Base.astro';
 ---
 <Base title="Documentation">
-  <h1>Temporibus autem quibusdam et aut officiis</h1>
-  <p class="dek">Itaque earum rerum hic tenetur a sapiente delectus, ut aut reiciendis voluptatibus maiores alias.</p>
+  <h1>How I keep the lab's records</h1>
+  <p class="dek">One file says what THALES is today. Two more hold what broke and the rule I took from it.</p>
   <div class="prose">
-    <p>Nam libero tempore, cum soluta nobis est eligendi optio cumque nihil impedit quo minus id quod maxime placeat facere possimus, omnis voluptas assumenda est, omnis dolor repellendus.</p>
-    <p>Temporibus autem quibusdam et aut officiis debitis aut rerum necessitatibus saepe eveniet ut et voluptates repudiandae sint et molestiae non recusandae.</p>
-    <h2>Consequatur aut perferendis</h2>
-    <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.</p>
-    <p>Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.</p>
+    <p>I document THALES in an Obsidian vault, in three files. The single source of truth describes the lab as it runs today, down to the issues still open. A lessons file holds each resolved incident with the rule I took from it, and an issue log holds the closed issues. When I resolve an incident, I write the lesson and cut the story out of the current-state file. When an issue closes, I move it to the log.</p>
+    <p>The file this replaced had grown to 178 KB, with current settings buried under months of investigation. The split didn't hold at first. Within a day, fixes appended as corrections below the old statements had given back over a third of the space it saved, and two corrections four lines apart contradicted each other. Now I correct a fact in every place that states it and delete what it replaced. A lint runs on every push and flags any new correction block.</p>
+    <h2>Numbers that stay unique</h2>
+    <p>Lessons and issues carry numbers, prefixed L and I, and other notes cite them, as do comments in the Flux repository. The two sequences overlap, so a citation without its prefix is ambiguous. I stopped writing counts and ranges down after a hardcoded count went stale within a day and turned up wrong in five places at once.</p>
+    <p>A small service on the cluster hands out the next free number instead. It scales to zero between requests, and on each call it fetches all three files from GitHub and finds the highest number in use. It counts inline citations as well as list entries, because I once found an issue number cited in the current-state file with no entry behind it in either list, and came close to assigning it a second time.</p>
+    <h2>Written for two readers</h2>
+    <p>A hook loads the current-state file whole into every Claude Code session I run, so each line I add costs something in every session after it. Entries stay to a sentence or two, naming the thing and its current value. The investigation goes to the lessons file or nowhere.</p>
+    <p>The vault syncs between my machines, and a sync job copies the three files and everything else under the docs folder into a private Git repository, committing on each change. That repository holds the history I delete from the current-state file, across more than a thousand commits since March.</p>
   </div>
 </Base>
