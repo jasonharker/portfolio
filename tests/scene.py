@@ -13,6 +13,7 @@ whose feature hasn't landed yet report SKIP; any FAIL exits non-zero. No fps ass
 import functools
 import http.server
 import json
+import math
 import re
 import shutil
 import subprocess
@@ -312,6 +313,31 @@ def main():
         pg.mouse.up()
         settle(pg)
         check('orbit: a drag orbits a place too, and is not a click', pg.evaluate('__scene.orbit') > 0.2 and pg.evaluate('__scene.path') == '/gitops/', str(pg.evaluate('[__scene.orbit, __scene.path]')))
+
+        # Never under the disc: a long drag up (which lowers the eye) stops at the floor, on a place,
+        # on the landing, and on resume's overhead, where a sideways drag tilts toward the disc too.
+        floor = math.sin(0.1) - 1e-3
+
+        def haul(dx, dy):
+            pg.mouse.move(vw * 0.85, vh * 0.5)
+            pg.mouse.down()
+            pg.mouse.move(vw * 0.85 + dx, vh * 0.5 + dy, steps=12)
+            pg.mouse.up()
+            settle(pg)
+            return pg.evaluate('__scene.height')
+
+        h = haul(0, -vh * 0.45)
+        check('orbit: a drag up on a place stops above the disc', h >= floor, str(h))
+        pg.click('a.wordmark')
+        wait(pg, "__scene.path === '/'")
+        settle(pg)
+        h = haul(0, -vh * 0.45)
+        check('orbit: a drag up on the landing stops above the disc', h >= floor, str(h))
+        pg.click('.masthead a[href="/resume/"]')
+        wait(pg, "__scene.path === '/resume/'")
+        settle(pg)
+        h = [haul(-vw * 0.4, 0), haul(0, -vh * 0.45)]
+        check('orbit: resume overhead never tilts under the disc', min(h) >= floor, str(h))
         pg.click('a.wordmark')
         wait(pg, "__scene.path === '/'")
         settle(pg)
