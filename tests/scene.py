@@ -170,7 +170,8 @@ BARE_PORT = re.compile(r'(?i)(?<=[a-z0-9\]_-])\:\d{2,5}\b')
 
 def scan_dist(dist):
     hits = []
-    for f in sorted(p for p in dist.rglob('*') if p.is_file()):
+    # woff2 is Brotli-compressed glyph data: no readable text, only bytes that can decode to a digit run with a ':' before it.
+    for f in sorted(p for p in dist.rglob('*') if p.is_file() and p.suffix != '.woff2'):
         text = f.read_text(encoding='utf-8', errors='replace')
         patterns = [IPV4, HOST_PORT, PORT_WORD] + ([] if f.suffix in ('.js', '.mjs', '.css') else [BARE_PORT])
         for rx in patterns:

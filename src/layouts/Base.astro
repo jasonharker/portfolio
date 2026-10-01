@@ -3,8 +3,9 @@ import { getCollection, getEntry } from 'astro:content';
 import { ClientRouter } from 'astro:transitions';
 import '../styles/site.css';
 import '../styles/scene-labels.css';
-// Same hashed URL the @font-face in tokens.css resolves to, so the preload is the request it uses.
+// Same hashed URLs the @font-face rules in tokens.css resolve to, so each preload is the request it uses.
 import pagella from '../fonts/pagella-regular.woff2?url';
+import sans from '../fonts/ibm-plex-sans-400-normal.woff2?url';
 
 interface Props {
   title?: string;
@@ -41,6 +42,7 @@ const incidents = json(
     <meta name="theme-color" content="#0a0d16" />
     <title>{fullTitle}</title>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="preload" href={sans} as="font" type="font/woff2" crossorigin />
     <link rel="preload" href={pagella} as="font" type="font/woff2" crossorigin />
     <ClientRouter />
   </head>
