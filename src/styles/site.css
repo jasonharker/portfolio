@@ -119,8 +119,9 @@ article > section h2 { font-size: var(--step-0); }
    current length sits inside a laptop viewport and the page has no scrollbar at all. It is the
    first thing anyone sees; a scrollbar on four short paragraphs reads as a page that didn't fit. */
 .landing .column { padding-top: var(--space-4); padding-bottom: var(--space-3); }
-.landing h1 { font-size: var(--step-3); }
-.landing .dek { font-size: var(--step-0); }
+.landing h1 { font-size: var(--step-4); }
+.landing .dek { font-size: var(--step-1); }
+.essay { font-size: var(--step-1); }
 .landing .column > * + * { margin-top: var(--space-3); }
 .essay > section + section { margin-top: var(--space-3); }
 /* The landing sky can be dragged to orbit the camera (scene/index.ts); the words and the rail can't. */
