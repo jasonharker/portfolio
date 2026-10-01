@@ -8,7 +8,7 @@ if (new Set(orders).size !== orders.length) throw new Error('incidents: duplicat
 ---
 <Base title="Incidents">
   <h1>What broke in the lab, and why</h1>
-  <p class="dek">Resolved incidents from THALES, each with the cause I found and the rule I kept.</p>
+  <p class="dek">Resolved incidents from my homelab, each with the cause I found and the rule I kept.</p>
   <ul class="list">
     {incidents.map((i) => (
       <li>
