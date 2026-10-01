@@ -6,7 +6,7 @@ const incidents = (await getCollection('incidents')).sort((a, b) => a.data.order
 const orders = incidents.map((i) => i.data.order);
 if (new Set(orders).size !== orders.length) throw new Error('incidents: duplicate `order` values');
 ---
-<Base title="Incidents">
+<Base title="Incidents" description="Resolved homelab incidents, each written up with the cause and the rule that came out of it.">
   <h1>What broke in the lab, and why</h1>
   <p class="dek">Resolved incidents from my homelab, each with the cause I found and the rule I kept.</p>
   <ul class="list">
