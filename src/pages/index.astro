@@ -4,32 +4,29 @@ import Base from '../layouts/Base.astro';
 
 // The essay is the landing page and the sky is its backdrop (M5). Headings come from the same
 // chapters the asterisms are built from, so a chapter can never be lit with no words under it, or
-// read with no figure behind it. The bodies are lorem until the real prose lands; they are sized to
-// what will replace them so the scroll, the chapter lighting and the tests all exercise the real
-// thing.
+// read with no figure behind it.
 const { chapters } = (await getEntry('topology', 'thales'))!.data;
 const body: Record<string, string[]> = {
   warehouse: [
-    'When I was 14 the family computer had a hardware failure, so I scrapped together a new one. Rather than install Windows Vista I chose a Debian distro called Crunchbang. Thus began a lifelong obsession with Linux and FOSS technology. ',
-    'I was so indecisive about what I wanted to do when I grew up. It never occurred to me that this hobby could be my career, or that Id be good at it.',
+    'When I was 14 the family computer had a hardware failure, so I scrapped together a new one. Rather than install Windows Vista I chose a Debian distro called Crunchbang. Thus began a lifelong obsession with Linux and FOSS.',
+    'I had no idea what I wanted to do when I grew up. It never occurred to me that this could be the job, or that I\'d be any good at it.',
   ],
   philosophy: [
-    'In high school I got sick and I started spending way more time on the computer. I was bedridden--scrubbing StackOverflow for help with Makefiles, installing Gentoo, learning Python--instead of going to class.',
-    'But I still graduated on-time at 17 thanks to summer school. I worked in factories and warehouses for a few years after high school until I enrolled in UNLV to study one of my other passions, Philosophy.',
+    'In high school I got sick. In high school I spent more time in bed than in class. I was scouring StackOverflow for help with Makefiles, installing Gentoo, learning Python. I graduated on time at 17 anyway, thanks to summer school.',
+    'I worked in factories and warehouses for a few years, then enrolled at UNLV to study one of my other passions, philosophy. In school I studied logic and systems of thinking, the history of ideas and the nature of intelligence. The analytical skills I learned then I use now more than ever.',
   ],
   'vet-med': [
-    'While studying in college, I took a job at a veterinary hospital. I\'d spend the duration of the pandemic working in the field.',
-    'Eventually I started studying for the CompTIA A+ on my lunch breaks, got my certification, and began aggressively pursuing help desk jobs until Circa took a chance on me.',
+    'Junior year I took a job at a veterinary hospital, and ended up staying through the pandemic. After a few years and a few bites I decided enough was enough. I started studying for the CompTIA A+ on my lunch breaks, got the certification, and aggressively pursued help desk jobs until Circa took a chance on me.',
   ],
   'casino-it': [
-    'At Circa I was prompty promoted to Desktop Support Specialist. About a year later, I was promoted to Sysadmin, and about a year after that, I let slip that I run a sophisticated K8s cluster in my homelab and was promoted to Cloud Engineer not long after.',
-    'Stick the landing.',
+    'At Circa I was promptly promoted to Desktop Support Specialist. About a year later, Sysadmin. About a year after that, I let slip that I run a sophisticated Kubernetes cluster in my homelab, and not long after that, Cloud Engineer.',
+    'I’ve never liked going to work, or at least I thought. I always wanted to be at home tinkering and it took a long time to realize the two aren’t mutually exclusive. I didn’t hate going to work; I hated having to stop tinkering.',
   ],
 };
 ---
 <Base bodyClass="landing">
-  <h1>Lorem ipsum dolor sit amet</h1>
-  <p class="dek">Consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p>
+  <h1>Jason Harker</h1>
+  <p class="dek">Cloud engineer in Las Vegas. This is how I got here.</p>
   <article class="essay">
     {chapters.map((chapter) => (
       <section class="prose" data-chapter={chapter.id}>
