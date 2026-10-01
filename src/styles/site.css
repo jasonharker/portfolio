@@ -169,6 +169,10 @@ article > section h2 { font-size: var(--step-0); }
     padding: var(--space-5) var(--space-4) var(--space-6) calc(var(--rail) + var(--space-3));
     overflow-y: auto;
     overscroll-behavior: contain;
+    /* The default scrollbar is a grey slab over the sky; a thin muted thumb on no track keeps the
+       affordance without the chrome. */
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in srgb, var(--muted) 35%, transparent) transparent;
     transform: translateX(-100%);
     transition: transform 0.35s var(--ease-in-out);
   }
