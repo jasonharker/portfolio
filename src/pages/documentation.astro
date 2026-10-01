@@ -3,9 +3,10 @@ import Base from '../layouts/Base.astro';
 ---
 <Base title="Documentation">
   <h1>How I keep the lab's records</h1>
-  <p class="dek">One file says what THALES is today. Two more hold what broke and the rule I took from it.</p>
+  <p class="dek">One file says what the lab is today. Two more hold what broke and the rule I took from it.</p>
   <div class="prose">
-    <p>I document THALES in an Obsidian vault, in three files. The single source of truth describes the lab as it runs today, down to the issues still open. A lessons file holds each resolved incident with the rule I took from it, and an issue log holds the closed issues. When I resolve an incident, I write the lesson and cut the story out of the current-state file. When an issue closes, I move it to the log.</p>
+    <p>The homelab has its own documentation site, a tour of the lab as it runs today: <a href="https://thales.jasonharker.com/">thales.jasonharker.com</a>.</p>
+    <p>My working records live in an Obsidian vault, in three files. The single source of truth describes the lab as it runs today, down to the issues still open. A lessons file holds each resolved incident with the rule I took from it, and an issue log holds the closed issues. When I resolve an incident, I write the lesson and cut the story out of the current-state file. When an issue closes, I move it to the log.</p>
     <p>The file this replaced had grown to 178 KB, with current settings buried under months of investigation. The split didn't hold at first. Within a day, fixes appended as corrections below the old statements had given back over a third of the space it saved, and two corrections four lines apart contradicted each other. Now I correct a fact in every place that states it and delete what it replaced. A lint runs on every push and flags any new correction block.</p>
     <h2>Numbers that stay unique</h2>
     <p>Lessons and issues carry numbers, prefixed L and I, and other notes cite them, as do comments in the Flux repository. The two sequences overlap, so a citation without its prefix is ambiguous. I stopped writing counts and ranges down after a hardcoded count went stale within a day and turned up wrong in five places at once.</p>
