@@ -156,10 +156,13 @@ const fragment = /* glsl */ `
     float w = 0.3 + 0.05 * r; // arm half-width, kpc
 
     // Arms: starlight summed over all of them; the dust follows the nearest (d across it, s along it).
-    float stars = 0.0, d = 1e3, s = 0.0;
+    // broad is the same arms' diffuse light, wider than the dust that rides them, so seen whole the
+    // arms are brighter bands in a lit disc rather than threads on black.
+    float stars = 0.0, broad = 0.0, d = 1e3, s = 0.0;
     for (int k = 0; k < ARMS; k++) {
       float dk = (mod(theta - armAngle(k, r) + PI, 2.0 * PI) - PI) * r;
       stars += exp(-0.5 * dk * dk / (w * w * 1.8));
+      broad += exp(-0.5 * dk * dk / (w * w * 3.5));
       if (abs(dk) < abs(d)) {
         d = dk;
         s = r * uAlong + float(k) * 41.0;
@@ -194,8 +197,9 @@ const fragment = /* glsl */ `
     small.y *= smallLod;
     float floorDust = mix(0.1, 0.03, uLook); // the Region tier's bubbles are emptier still
     float hole = mix(1.0, floorDust + (1.0 - floorDust) * smoothstep(0.4, 1.0, big.x), big.y) * mix(1.0, floorDust + (1.0 - floorDust) * smoothstep(0.35, 1.0, small.x), small.y);
-    float rim = big.y * exp(-(big.x - 1.0) * (big.x - 1.0) / 0.04) + small.y * exp(-(small.x - 1.0) * (small.x - 1.0) / 0.05);
-    dust = dust * hole * (1.0 + mix(1.5, 2.2, uLook) * rim);
+    // Soft and low: a crisp bright rim seen at a grazing angle reads as a ripple on water.
+    float rim = big.y * exp(-(big.x - 1.0) * (big.x - 1.0) / 0.12) + small.y * exp(-(small.x - 1.0) * (small.x - 1.0) / 0.12);
+    dust = dust * hole * (1.0 + rim);
 
     // Star-forming knots where the arms are, carving their own small clearings. Small ones resolve closer.
     float sfProb = 0.55 * arm * edge * inner;
@@ -213,7 +217,7 @@ const fragment = /* glsl */ `
     // Close up there is no smooth floor of starlight: it is patchy, gathered in the arm and near black
     // between, and the bulge is left to the tier's own core glow rather than painted on the plane.
     float patchy = (0.02 + 0.5 * stars * stars) * (0.3 + 0.7 * smoothstep(-0.5, 0.5, warp.y));
-    float light = disc * mix(0.08 + 0.35 * stars, patchy, uLook) + bulge * mix(1.0, 0.08, uLook);
+    float light = disc * mix(0.4 + 0.5 * broad, patchy, uLook) + bulge * mix(1.0, 0.08, uLook);
     vec3 starColour = mix(mix(vec3(0.4, 0.6, 1.0), vec3(1.0, 0.86, 0.74), uLook), vec3(0.85, 0.92, 1.0), clamp(bulge, 0.0, 1.0));
 
     // Galaxy (MIRI): the dust glows, deep red where thin, through red-orange and amber to pale gold where
@@ -223,7 +227,7 @@ const fragment = /* glsl */ `
     ramp = mix(ramp, vec3(1.0, 0.5, 0.1), smoothstep(0.6, 1.8, heat));
     ramp = mix(ramp, vec3(1.0, 0.8, 0.5), smoothstep(2.2, 5.0, heat));
     float absorb = clamp(dust * mix(0.15, 0.7, uLook), 0.0, 0.95);
-    vec3 rgb = starColour * light * mix(0.5, 0.55, uLook) * (1.0 - absorb) + ramp * dust * mix(0.3, 0.11, uLook);
+    vec3 rgb = starColour * light * mix(0.5, 0.55, uLook) * (1.0 - absorb) + ramp * dust * mix(0.22, 0.11, uLook); // under the core, not competing with it
 
     // Knots: pink to white in the Galaxy tier; in the Region tier pink HII cores with teal-cyan fringes.
     vec3 pink = mix(vec3(1.0, 0.35, 0.7), vec3(1.0, 0.85, 0.92), smoothstep(0.3, 1.0, kn.z));
