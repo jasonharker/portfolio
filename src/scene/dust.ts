@@ -182,10 +182,11 @@ const fragment = /* glsl */ `
     float strands = filaments(q, px * 1.3, 0.06);
     float lanes = envelope * strands * (0.35 + 0.9 * fray);
 
-    // The inter-arm web: fainter, isotropic, warped so it reads as gas rather than noise.
+    // The inter-arm web: fainter, isotropic, warped so it reads as gas rather than noise. Seen whole it
+    // carries more of its weight off the arms, as M74's does, so the gaps between them aren't empty.
     float web = filaments(xz * 1.3 + warp * 0.9, px * 1.3, 0.04);
     float disc0 = exp(-r / 9.0);
-    float dust = (lanes * 0.8 + web * 1.1 * disc0 * (0.3 + 0.7 * min(stars, 1.0)) * smoothstep(-0.6, 0.4, warp.x)) * edge * inner;
+    float dust = (lanes * 0.8 + web * 1.1 * disc0 * mix(mix(0.5, 0.3, uLook), 1.0, min(stars, 1.0)) * smoothstep(-0.6, 0.4, warp.x)) * edge * inner;
 
     // Cavities: hollow bubbles blown by star formation, with broken rims where the gas piled up. Two
     // scales; the small ones are only resolved in the Region tier.
@@ -211,8 +212,9 @@ const fragment = /* glsl */ `
     float clump = 0.3 + 0.7 * min(web, 3.0) / 3.0; // irregular, not drawn with a compass
     dust *= 1.0 - 0.7 * min(kn.x + kn.y * 0.5, 1.0);
 
-    // Diffuse starlight: an exponential disc, arms, and the bulge.
-    float disc = exp(-r / 4.2) * edge;
+    // Diffuse starlight: an exponential disc, arms, and the bulge. Seen whole the disc reaches further
+    // out, so the outer arms sit in faint light too.
+    float disc = exp(-r / mix(5.5, 4.2, uLook)) * edge;
     float bulge = exp(-r * r / 0.5) * 1.1 + exp(-r / 1.1) * 0.25;
     // Close up there is no smooth floor of starlight: it is patchy, gathered in the arm and near black
     // between, and the bulge is left to the tier's own core glow rather than painted on the plane.
