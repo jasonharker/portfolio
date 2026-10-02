@@ -248,6 +248,7 @@ export function createNebula(ctx: SceneContext): LocalPlace {
         position: [pan[0], d * Math.sin(TILT) + pan[1], d * Math.cos(TILT) + pan[2]],
         target: pan,
         fov: FOV,
+        pivot: [0, 0, 0],
       };
     },
 

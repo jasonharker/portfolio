@@ -152,7 +152,8 @@ export function createFlight(stage: Stage): Director {
       const dir = slerp(dir0, dir1, k);
       level(r);
       const up = turn ? square(slerp(turn[0], turn[1], k), dir) : undefined;
-      stage.pose({ position: target.map((v, i) => v + dir[i] * r) as Vec3, target, fov: from.fov + (to.fov - from.fov) * k, up });
+      const pivot = mix(from.pivot ?? from.target, to.pivot ?? to.target, k);
+      stage.pose({ position: target.map((v, i) => v + dir[i] * r) as Vec3, target, fov: from.fov + (to.fov - from.fov) * k, up, pivot });
       return true;
     },
   };

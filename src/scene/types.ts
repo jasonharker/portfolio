@@ -40,6 +40,9 @@ export interface CameraPose {
   fov: number;
   /** Screen up. Absent means world Y, square to the view; a view straight down has no such up and must say. */
   up?: Vec3;
+  /** What a drag orbits: the framed object's centre. Frames pan the target aside to clear the
+   *  column, so the target is empty sky; absent means the target. */
+  pivot?: Vec3;
 }
 
 export interface SceneContext {
@@ -152,6 +155,7 @@ export interface SceneDebug {
   parallax: number; // eased mouse offset, 0 at rest, up to ~1.4 in a viewport corner
   orbit: number; // eased drag orbit on the landing page, radians; stays where the drag left it
   height: number; // sine of the eye's elevation above the disc plane, orbit included; never below sin(0.1)
+  pivot: [number, number]; // what a drag orbits, in CSS px; an orbit leaves it where it is on screen
   sway: number; // camera offset from the director's pose, as a fraction of view distance (parallax + drift)
   hoverable: boolean; // the active tier implements hot()
 }
