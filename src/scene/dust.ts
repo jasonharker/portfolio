@@ -12,7 +12,7 @@
 //
 // Cost: full-screen noise, so it renders into its own target at quality.dustScale of CSS pixels and
 // is composited with one full-screen triangle: rgb adds, alpha absorbs whatever was drawn before it.
-// Per pixel: 5 noise samples, plus two filament fbms of up to `octaves` samples each (octaves finer
+// Per pixel: 6 noise samples, plus two filament fbms of up to `octaves` samples each (octaves finer
 // than the pixel are skipped, so ~3 each at Galaxy scale), plus 18 hashed cell probes (36 once the
 // small cavities and knots resolve, Region only). The target re-renders only when the view changes.
 import * as THREE from 'three';
@@ -87,7 +87,7 @@ const fragment = /* glsl */ `
   }
 
   // Cavities on a jittered grid of cell size \`cell\` kpc: (distance to the nearest centre in radii, its
-  // strength 0..1). \`p\` decides how many cells hold one; radii vary by 3x.
+  // strength 0..1). \`p\` decides how many cells hold one; radii log-uniform over 6x.
   vec2 cavities(vec2 p, float cell, float prob) {
     vec2 g = floor(p / cell), f = p / cell - g;
     vec2 best = vec2(9.0, 0.0);
@@ -97,7 +97,7 @@ const fragment = /* glsl */ `
       float s = smoothstep(keep, keep + 0.15, prob);
       if (s <= 0.0) continue;
       float h = hash12(g + o + 3.1);
-      float q = length(o + 0.15 + 0.7 * hash22(g + o) - f) / (0.16 + 0.34 * h * h);
+      float q = length(o + 0.15 + 0.7 * hash22(g + o) - f) / (0.08 * exp(1.8 * h));
       if (q < best.x) best = vec2(q, s);
     }
     return best;
@@ -142,6 +142,8 @@ const fragment = /* glsl */ `
     return sum;
   }
 
+  const vec4 ARM_END = vec4(16.0, 14.2, 15.3, 14.8); // kpc where each arm has faded out; places reach 11
+
   void main() {
     vec2 xz = vXZ;
     float px = length(fwidth(xz)); // kpc per target pixel
@@ -158,41 +160,53 @@ const fragment = /* glsl */ `
     // Arms: starlight summed over all of them; the dust follows the nearest (d across it, s along it).
     // broad is the same arms' diffuse light, wider than the dust that rides them, so seen whole the
     // arms are brighter bands in a lit disc rather than threads on black.
-    float stars = 0.0, broad = 0.0, d = 1e3, s = 0.0;
+    float stars = 0.0, broad = 0.0, d = 1e3, s = 0.0, tip = 1.0;
     for (int k = 0; k < ARMS; k++) {
       float dk = (mod(theta - armAngle(k, r) + PI, 2.0 * PI) - PI) * r;
-      stars += exp(-0.5 * dk * dk / (w * w * 1.8));
-      broad += exp(-0.5 * dk * dk / (w * w * 3.5));
+      // Each arm fades out over its own last 3 kpc, rather than all of them on one circle.
+      float fade = smoothstep(ARM_END[k], ARM_END[k] - 3.0, r);
+      stars += exp(-0.5 * dk * dk / (w * w * 1.8)) * fade;
+      broad += exp(-0.5 * dk * dk / (w * w * 3.5)) * fade;
       if (abs(dk) < abs(d)) {
         d = dk;
         s = r * uAlong + float(k) * 41.0;
+        tip = fade;
       }
     }
+    // Nor is an arm drawn with an even hand: past the inner disc it brightens, thins and breaks along its length.
+    float seg = mix(1.0, 0.45 + 0.9 * smoothstep(-0.5, 0.5, gnoise(vec2(s * 0.12, 2.7))), smoothstep(1.0, 3.0, r));
+    stars *= seg;
 
     // Everything meanders: a slow warp shifts lanes, web and cavities alike.
     vec2 warp = vec2(gnoise(xz * 0.4), gnoise(xz * 0.4 + 5.2));
 
-    // The lane sits on the arm's inner edge. Outward of it the arm frays: its strands fan out and wander
-    // off as spurs, further where the along-arm noise says so.
-    float dl = d + 0.35 * w + 0.5 * w * warp.x;
+    // The lane sits on the arm's concave edge, where the gas runs into it: d > 0 there, since the arm reaches
+    // that angle further out. Downstream the arm frays: its strands fan out and wander off as spurs, further
+    // where the along-arm noise says so.
+    float dl = 0.35 * w + 0.5 * w * warp.x - d;
     float fray = 0.5 + 0.5 * gnoise(vec2(s * 0.3, float(ARMS) + d * 0.2));
     float outer = max(dl, 0.0);
     float envelope = exp(-0.5 * dl * dl / (w * w * 1.2)) + smoothstep(0.2, 0.8, fray) * exp(-outer / (w * 2.2)) * step(0.0, dl) * 0.7;
     vec2 q = vec2(s * 0.3, (dl - 0.55 * outer) * 1.3 + warp.y * 1.2 * smoothstep(0.0, 2.5 * w, outer));
     float strands = filaments(q, px * 1.3, 0.06);
-    float lanes = envelope * strands * (0.35 + 0.9 * fray);
+    float lanes = envelope * strands * (0.35 + 0.9 * fray) * seg * tip;
 
-    // The inter-arm web: fainter, isotropic, warped so it reads as gas rather than noise. Seen whole it
-    // carries more of its weight off the arms, as M74's does, so the gaps between them aren't empty.
-    float web = filaments(xz * 1.3 + warp * 0.9, px * 1.3, 0.04);
+    // The inter-arm web, fainter. Differential rotation winds all gas into trailing spirals, so the web is
+    // sampled in a frame that unwinds nearly as fast as the arms: its filaments trail with them, a little
+    // steeper, in long strands rather than curls. Seen whole it carries more of its weight off the arms, as
+    // M74's does, so the gaps between them aren't empty.
+    float tw = 0.85 * sqrt(uAlong * uAlong - 1.0) * log(max(r, R_MIN));
+    vec2 sh = mat2(cos(tw), -sin(tw), sin(tw), cos(tw)) * xz * 1.3 + warp * 0.9;
+    float web = filaments(sh, length(fwidth(sh)), 0.04);
     float disc0 = exp(-r / 9.0);
     float dust = (lanes * 0.8 + web * 1.1 * disc0 * mix(mix(0.5, 0.3, uLook), 1.0, min(stars, 1.0)) * smoothstep(-0.6, 0.4, warp.x)) * edge * inner;
 
     // Cavities: hollow bubbles blown by star formation, with broken rims where the gas piled up. Two
-    // scales; the small ones are only resolved in the Region tier.
+    // scales; the small ones are only resolved in the Region tier. The big ones mostly open between the arms,
+    // as M74's largest voids do: a row of them along a lane reads as beads.
     float arm = min(stars, 1.0);
     vec2 cw = xz + warp * 0.3 + 0.12 * vec2(gnoise(xz * 2.6), gnoise(xz * 2.6 + 3.3));
-    vec2 big = cavities(cw, 1.2, 0.1 + 0.4 * arm);
+    vec2 big = cavities(cw, 1.2, 0.25 - 0.1 * arm);
     float smallLod = 1.0 - smoothstep(0.02, 0.05, px);
     vec2 small = smallLod > 0.0 ? cavities(cw + 3.7, 0.3, 0.15 + 0.45 * arm) : vec2(9.0, 0.0);
     small.y *= smallLod;
@@ -215,11 +229,11 @@ const fragment = /* glsl */ `
     // Diffuse starlight: an exponential disc, arms, and the bulge. Seen whole the disc reaches further
     // out, so the outer arms sit in faint light too.
     float disc = exp(-r / mix(5.5, 4.2, uLook)) * edge;
-    float bulge = exp(-r * r / 0.5) * 1.1 + exp(-r / 1.1) * 0.25;
+    float bulge = exp(-r * r / 0.5) * 1.1 + exp(-r / 1.1) * 0.12;
     // Close up there is no smooth floor of starlight: it is patchy, gathered in the arm and near black
     // between, and the bulge is left to the tier's own core glow rather than painted on the plane.
     float patchy = (0.02 + 0.5 * stars * stars) * (0.3 + 0.7 * smoothstep(-0.5, 0.5, warp.y));
-    float light = disc * mix(0.4 + 0.5 * broad, patchy, uLook) + bulge * mix(1.0, 0.08, uLook);
+    float light = disc * mix(0.15 + 0.6 * broad, patchy, uLook) + bulge * mix(1.0, 0.08, uLook);
     vec3 starColour = mix(mix(vec3(0.4, 0.6, 1.0), vec3(1.0, 0.86, 0.74), uLook), vec3(0.85, 0.92, 1.0), clamp(bulge, 0.0, 1.0));
 
     // Galaxy (MIRI): the dust glows, deep red where thin, through red-orange and amber to pale gold where

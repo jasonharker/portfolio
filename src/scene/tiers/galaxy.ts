@@ -64,7 +64,7 @@ const glowFragment = /* glsl */ `
   varying vec2 vUv;
   void main() {
     float d = length(vUv) * 8.0; // kpc-ish, the quad spans ±8
-    float i = 2.2 * exp(-d * d / 0.06) + 0.6 * exp(-d * d / 1.2) + 0.16 * exp(-d / 2.0);
+    float i = 2.2 * exp(-d * d / 0.06) + 0.5 * exp(-d * d / 0.6) + 0.06 * exp(-d / 1.5); // compact: wide blue wings read as a cataract
     i *= smoothstep(8.0, 5.0, d);
     // Blue-white: white where it saturates, the tint in the wings.
     gl_FragColor = vec4(mix(uColor, vec3(1.0), clamp(i - 0.6, 0.0, 1.0)) * i, 1.0);
@@ -175,7 +175,7 @@ export const galaxy: Tier = {
       const x = model.positions[i * 3], y = model.positions[i * 3 + 1], z = model.positions[i * 3 + 2];
       const dim = THREE.MathUtils.smoothstep(Math.hypot(x, y, z), 0.5, 6) * 0.6 + 0.15;
       // The young blue clusters along the arms' spines, bigger and brighter so they show against the gold.
-      const young = t > 12000 ? 1.5 : 1;
+      const young = t > 12000 ? 1.2 : 1;
       col.multiplyScalar(dim * young);
       tint.set([col.r, col.g, col.b, 0.05 * lum * young], i * 4);
     }

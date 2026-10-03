@@ -111,6 +111,7 @@ export function galaxyModel(seed: number, count: number, waypoints: Waypoint[]):
   const positions = new Float32Array(count * 3);
   const temperatures = new Float32Array(count);
 
+  let cx = 0, cz = 0, left = 0; // the open association
   for (let i = 0; i < count; i++) {
     const kind = rand();
     let x: number, y: number, z: number, t: number;
@@ -130,8 +131,21 @@ export function galaxyModel(seed: number, count: number, waypoints: Waypoint[]):
       x = r * Math.cos(a);
       z = r * Math.sin(a);
       y = gauss() * 0.1;
-      // Young, hot stars trace the arm's spine; the rest of the arm is ordinary.
-      t = Math.abs(off) < width * 0.6 && rand() < 0.35 ? logBetween(8500, 30000) : between(3600, 7000);
+      // Young, hot stars trace the arm's spine, born together within ~80 pc: the first of each association
+      // sets where the rest gather. Mostly sparse ones, a few rich: equal knots would read as a string of
+      // pearls. The rest of the arm is ordinary.
+      if (Math.abs(off) < width * 0.6 && rand() < 0.35) {
+        if (left > 0) {
+          left--;
+          x = cx + gauss() * 0.08;
+          z = cz + gauss() * 0.08;
+        } else {
+          cx = x;
+          cz = z;
+          left = 2 + Math.floor(45 * Math.pow(rand(), 4));
+        }
+        t = logBetween(8500, 30000);
+      } else t = between(3600, 7000);
     } else {
       // Inter-arm disc.
       const r = discRadius(0.8, 5);
