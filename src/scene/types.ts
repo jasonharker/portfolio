@@ -154,6 +154,7 @@ export interface SceneDebug {
   paused: boolean;
   parallax: number; // eased mouse offset, 0 at rest, up to ~1.4 in a viewport corner
   orbit: number; // eased drag orbit on the landing page, radians; stays where the drag left it
+  zoom: number; // eased wheel dolly, a log factor on the arm; 0 is the pose's own distance
   height: number; // sine of the eye's elevation above the disc plane, orbit included; never below sin(0.1)
   pivot: [number, number]; // what a drag orbits, in CSS px; an orbit leaves it where it is on screen
   sway: number; // camera offset from the director's pose, as a fraction of view distance (parallax + drift)

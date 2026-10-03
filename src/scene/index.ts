@@ -27,6 +27,8 @@ const DRIFT_S: [number, number] = [31, 23]; // periods of the lateral and vertic
 const ORBIT_PX = 0.005;
 const ORBIT_MAX = [Math.PI, 1.3]; // yaw, pitch
 const FLOOR = Math.sin(0.1); // the eye stays 0.1 rad above the disc plane: nothing is seen from underneath
+const ZOOM_MAX = [Math.log(0.35), Math.log(2.5)]; // the arm's length, as a log factor on the pose's
+const ZOOM_PX = 0.0015; // log factor per wheel pixel
 const CLICK_PX = 4; // a drag shorter than this is still a click (a planet in the orrery)
 
 export function start(canvas: HTMLCanvasElement, gl: WebGL2RenderingContext, labels: HTMLElement): Scene {
@@ -47,9 +49,9 @@ export function start(canvas: HTMLCanvasElement, gl: WebGL2RenderingContext, lab
   let active: Tier | null = null;
   let pose: CameraPose = { position: [0, 0, 1], target: [0, 0, 0], fov: 50 };
 
-  // `goal` is [parallax x, parallax y, orbit yaw, orbit pitch]: the pointer in [-1, 1] (y up), then
-  // the drag in radians. `at`/`vel` are the eased value per axis; one spring serves both.
-  const goal = [0, 0, 0, 0], at = [0, 0, 0, 0], vel = [0, 0, 0, 0];
+  // `goal` is [parallax x, parallax y, orbit yaw, orbit pitch, zoom]: the pointer in [-1, 1] (y up),
+  // the drag in radians, then the wheel as a log factor on the arm. `at`/`vel` are the eased value per axis; one spring serves both.
+  const goal = [0, 0, 0, 0, 0], at = [0, 0, 0, 0, 0], vel = [0, 0, 0, 0, 0];
   let drift = 0; // seconds of rendered frames
   let swayed = 0; // camera offset from the pose position / view distance, for __scene
   const [eye, look, right, up, arm, axis] = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
@@ -59,7 +61,7 @@ export function start(canvas: HTMLCanvasElement, gl: WebGL2RenderingContext, lab
   const ease = (dt: number) => {
     let moving = false;
     const e = Math.exp(-PARALLAX_W * dt);
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < 5; i++) {
       const d = at[i] - goal[i], k = (vel[i] + PARALLAX_W * d) * dt;
       at[i] = goal[i] + (d + k) * e;
       vel[i] = (vel[i] - PARALLAX_W * k) * e;
@@ -91,6 +93,10 @@ export function start(canvas: HTMLCanvasElement, gl: WebGL2RenderingContext, lab
   // Pose plus sway into the camera. Called on every rendered frame, and whenever the pose changes.
   function aim() {
     swing(at[2], at[3], eye, look, camera.up); // orbit first
+    look.set(...pose.target);
+    swing(at[2], at[3], arm, camera.up); // orbit first
+    arm.multiplyScalar(Math.exp(at[4])); // then the wheel's dolly, along the arm
+    eye.addVectors(look, arm);
     const dist = eye.distanceTo(look);
     const [sx, sy] = [
       PARALLAX * at[0] + DRIFT * Math.sin((2 * Math.PI * drift) / DRIFT_S[0]),
@@ -154,6 +160,7 @@ export function start(canvas: HTMLCanvasElement, gl: WebGL2RenderingContext, lab
       const v = new THREE.Vector3(...(pose.pivot ?? pose.target)).project(camera);
       return [((v.x + 1) / 2) * innerWidth, ((1 - v.y) / 2) * innerHeight] as [number, number];
     },
+    get zoom() { return at[4]; },
     get sway() { return swayed; },
     get hoverable() { return !!active?.hot; },
   };
@@ -208,6 +215,11 @@ export function start(canvas: HTMLCanvasElement, gl: WebGL2RenderingContext, lab
     if (!sway) (at[2] = goal[2]), (at[3] = goal[3]);
     loop.invalidate();
   };
+  const zoom = (z: number) => {
+    goal[4] = THREE.MathUtils.clamp(z, ZOOM_MAX[0], ZOOM_MAX[1]);
+    if (!sway) at[4] = goal[4];
+    loop.invalidate();
+  };
   // Drag on the sky, mouse or pen. Touch is left alone: on a phone a drag is the sheet's scroll.
   let drag: { x: number; y: number; yaw: number; pitch: number } | null = null;
   let dragged = false; // the last press moved past CLICK_PX, so its click is not a click
@@ -228,6 +240,13 @@ export function start(canvas: HTMLCanvasElement, gl: WebGL2RenderingContext, lab
   const release = () => ((drag = null), root.toggleAttribute('data-dragging', false));
   addEventListener('pointerup', release);
   addEventListener('pointercancel', release);
+
+  // The wheel dollies along the arm. Over the column or the masthead it is theirs to scroll.
+  addEventListener('wheel', (e) => {
+    if ((e.target as Element).closest?.('.column, .masthead')) return;
+    e.preventDefault();
+    zoom(goal[4] + e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? innerHeight : 1) * ZOOM_PX);
+  }, { passive: false });
 
   // Mouse only: touch has no hover, and a drag is a scroll. The same pointer drives the parallax.
   const point = (x: number, y: number) => {
@@ -259,8 +278,9 @@ export function start(canvas: HTMLCanvasElement, gl: WebGL2RenderingContext, lab
       }
       director.to(place, { instant });
       orbit(0, 0); // eases home over the flight's first moments, so the dolly starts where the camera is
+      zoom(0);
     },
-    skip: () => (director.skip(), orbit(0, 0)),
+    skip: () => (director.skip(), orbit(0, 0), zoom(0)),
     invalidate: () => loop.invalidate(),
   };
 
