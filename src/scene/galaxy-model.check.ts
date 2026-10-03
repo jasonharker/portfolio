@@ -51,4 +51,15 @@ for (let i = 0; i < N; i++) {
 }
 assert.ok(near > uniform * 1.5, `arm-hugging stars: ${near}, uniform would give ${uniform.toFixed(0)}`);
 
+// Young stars are born in associations: beyond 6 kpc, where the arms are sparse, some 0.2 kpc cell holds a dozen.
+const crowds = new Map<string, number>();
+for (let i = 0; i < N; i++) {
+  const [x, , z] = a.positions.subarray(i * 3, i * 3 + 3);
+  if (a.temperatures[i] < 8500 || Math.hypot(x, z) < 6) continue;
+  const key = `${Math.floor(x / 0.2)},${Math.floor(z / 0.2)}`;
+  crowds.set(key, (crowds.get(key) ?? 0) + 1);
+}
+const crowd = Math.max(0, ...crowds.values());
+assert.ok(crowd >= 12, `densest 0.2 kpc cell of young stars beyond 6 kpc holds ${crowd}`);
+
 console.log(`galaxy-model ok: ${a.arms} arms, ${places.length} places on arms, ${near} stars within 1 kpc of a spine (uniform: ${uniform.toFixed(0)})`);
