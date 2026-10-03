@@ -175,7 +175,7 @@ export const galaxy: Tier = {
       const x = model.positions[i * 3], y = model.positions[i * 3 + 1], z = model.positions[i * 3 + 2];
       const dim = THREE.MathUtils.smoothstep(Math.hypot(x, y, z), 0.5, 6) * 0.6 + 0.15;
       // The young blue clusters along the arms' spines, bigger and brighter so they show against the gold.
-      const young = t > 12000 ? 1.5 : 1;
+      const young = t > 12000 ? 1.2 : 1;
       col.multiplyScalar(dim * young);
       tint.set([col.r, col.g, col.b, 0.05 * lum * young], i * 4);
     }

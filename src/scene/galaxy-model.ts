@@ -131,17 +131,18 @@ export function galaxyModel(seed: number, count: number, waypoints: Waypoint[]):
       x = r * Math.cos(a);
       z = r * Math.sin(a);
       y = gauss() * 0.1;
-      // Young, hot stars trace the arm's spine, born together in associations of a few to dozens within
-      // ~60 pc: the first of each sets where the rest gather. The rest of the arm is ordinary.
+      // Young, hot stars trace the arm's spine, born together within ~80 pc: the first of each association
+      // sets where the rest gather. Mostly sparse ones, a few rich: equal knots would read as a string of
+      // pearls. The rest of the arm is ordinary.
       if (Math.abs(off) < width * 0.6 && rand() < 0.35) {
         if (left > 0) {
           left--;
-          x = cx + gauss() * 0.06;
-          z = cz + gauss() * 0.06;
+          x = cx + gauss() * 0.08;
+          z = cz + gauss() * 0.08;
         } else {
           cx = x;
           cz = z;
-          left = Math.round(logBetween(4, 60)) - 1;
+          left = 2 + Math.floor(45 * Math.pow(rand(), 4));
         }
         t = logBetween(8500, 30000);
       } else t = between(3600, 7000);

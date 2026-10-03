@@ -87,7 +87,7 @@ const fragment = /* glsl */ `
   }
 
   // Cavities on a jittered grid of cell size \`cell\` kpc: (distance to the nearest centre in radii, its
-  // strength 0..1). \`p\` decides how many cells hold one; radii log-spread over 5x, mostly small.
+  // strength 0..1). \`p\` decides how many cells hold one; radii log-uniform over 6x.
   vec2 cavities(vec2 p, float cell, float prob) {
     vec2 g = floor(p / cell), f = p / cell - g;
     vec2 best = vec2(9.0, 0.0);
@@ -97,7 +97,7 @@ const fragment = /* glsl */ `
       float s = smoothstep(keep, keep + 0.15, prob);
       if (s <= 0.0) continue;
       float h = hash12(g + o + 3.1);
-      float q = length(o + 0.15 + 0.7 * hash22(g + o) - f) / (0.1 * exp(1.6 * h * h));
+      float q = length(o + 0.15 + 0.7 * hash22(g + o) - f) / (0.08 * exp(1.8 * h));
       if (q < best.x) best = vec2(q, s);
     }
     return best;
@@ -174,7 +174,7 @@ const fragment = /* glsl */ `
       }
     }
     // Nor is an arm drawn with an even hand: past the inner disc it brightens, thins and breaks along its length.
-    float seg = mix(1.0, 0.4 + 0.6 * smoothstep(-0.5, 0.5, gnoise(vec2(s * 0.12, 2.7))), smoothstep(1.0, 3.0, r));
+    float seg = mix(1.0, 0.45 + 0.9 * smoothstep(-0.5, 0.5, gnoise(vec2(s * 0.12, 2.7))), smoothstep(1.0, 3.0, r));
     stars *= seg;
 
     // Everything meanders: a slow warp shifts lanes, web and cavities alike.
@@ -192,20 +192,21 @@ const fragment = /* glsl */ `
     float lanes = envelope * strands * (0.35 + 0.9 * fray) * seg * tip;
 
     // The inter-arm web, fainter. Differential rotation winds all gas into trailing spirals, so the web is
-    // sampled in a frame that unwinds at half the arms' rate, ln(r)/2b: its filaments trail like the arms but
-    // steeper, and cross the gaps as feathers rather than curling. Seen whole it carries more of its weight
-    // off the arms, as M74's does, so the gaps between them aren't empty.
-    float tw = 0.5 * sqrt(uAlong * uAlong - 1.0) * log(max(r, R_MIN));
+    // sampled in a frame that unwinds nearly as fast as the arms: its filaments trail with them, a little
+    // steeper, in long strands rather than curls. Seen whole it carries more of its weight off the arms, as
+    // M74's does, so the gaps between them aren't empty.
+    float tw = 0.85 * sqrt(uAlong * uAlong - 1.0) * log(max(r, R_MIN));
     vec2 sh = mat2(cos(tw), -sin(tw), sin(tw), cos(tw)) * xz * 1.3 + warp * 0.9;
     float web = filaments(sh, length(fwidth(sh)), 0.04);
     float disc0 = exp(-r / 9.0);
     float dust = (lanes * 0.8 + web * 1.1 * disc0 * mix(mix(0.5, 0.3, uLook), 1.0, min(stars, 1.0)) * smoothstep(-0.6, 0.4, warp.x)) * edge * inner;
 
     // Cavities: hollow bubbles blown by star formation, with broken rims where the gas piled up. Two
-    // scales; the small ones are only resolved in the Region tier.
+    // scales; the small ones are only resolved in the Region tier. The big ones mostly open between the arms,
+    // as M74's largest voids do: a row of them along a lane reads as beads.
     float arm = min(stars, 1.0);
     vec2 cw = xz + warp * 0.3 + 0.12 * vec2(gnoise(xz * 2.6), gnoise(xz * 2.6 + 3.3));
-    vec2 big = cavities(cw, 1.2, 0.1 + 0.4 * arm);
+    vec2 big = cavities(cw, 1.2, 0.25 - 0.1 * arm);
     float smallLod = 1.0 - smoothstep(0.02, 0.05, px);
     vec2 small = smallLod > 0.0 ? cavities(cw + 3.7, 0.3, 0.15 + 0.45 * arm) : vec2(9.0, 0.0);
     small.y *= smallLod;
