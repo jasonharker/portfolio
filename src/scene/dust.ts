@@ -142,6 +142,8 @@ const fragment = /* glsl */ `
     return sum;
   }
 
+  const vec4 ARM_END = vec4(16.0, 14.2, 15.3, 14.8); // kpc where each arm has faded out; places reach 11
+
   void main() {
     vec2 xz = vXZ;
     float px = length(fwidth(xz)); // kpc per target pixel
@@ -158,16 +160,22 @@ const fragment = /* glsl */ `
     // Arms: starlight summed over all of them; the dust follows the nearest (d across it, s along it).
     // broad is the same arms' diffuse light, wider than the dust that rides them, so seen whole the
     // arms are brighter bands in a lit disc rather than threads on black.
-    float stars = 0.0, broad = 0.0, d = 1e3, s = 0.0;
+    float stars = 0.0, broad = 0.0, d = 1e3, s = 0.0, tip = 1.0;
     for (int k = 0; k < ARMS; k++) {
       float dk = (mod(theta - armAngle(k, r) + PI, 2.0 * PI) - PI) * r;
-      stars += exp(-0.5 * dk * dk / (w * w * 1.8));
-      broad += exp(-0.5 * dk * dk / (w * w * 3.5));
+      // Each arm fades out over its own last 3 kpc, rather than all of them on one circle.
+      float fade = smoothstep(ARM_END[k], ARM_END[k] - 3.0, r);
+      stars += exp(-0.5 * dk * dk / (w * w * 1.8)) * fade;
+      broad += exp(-0.5 * dk * dk / (w * w * 3.5)) * fade;
       if (abs(dk) < abs(d)) {
         d = dk;
         s = r * uAlong + float(k) * 41.0;
+        tip = fade;
       }
     }
+    // Nor is an arm drawn with an even hand: past the inner disc it brightens, thins and breaks along its length.
+    float seg = mix(1.0, 0.4 + 0.6 * smoothstep(-0.5, 0.5, gnoise(vec2(s * 0.12, 2.7))), smoothstep(1.0, 3.0, r));
+    stars *= seg;
 
     // Everything meanders: a slow warp shifts lanes, web and cavities alike.
     vec2 warp = vec2(gnoise(xz * 0.4), gnoise(xz * 0.4 + 5.2));
@@ -181,7 +189,7 @@ const fragment = /* glsl */ `
     float envelope = exp(-0.5 * dl * dl / (w * w * 1.2)) + smoothstep(0.2, 0.8, fray) * exp(-outer / (w * 2.2)) * step(0.0, dl) * 0.7;
     vec2 q = vec2(s * 0.3, (dl - 0.55 * outer) * 1.3 + warp.y * 1.2 * smoothstep(0.0, 2.5 * w, outer));
     float strands = filaments(q, px * 1.3, 0.06);
-    float lanes = envelope * strands * (0.35 + 0.9 * fray);
+    float lanes = envelope * strands * (0.35 + 0.9 * fray) * seg * tip;
 
     // The inter-arm web, fainter. Differential rotation winds all gas into trailing spirals, so the web is
     // sampled in a frame that unwinds at half the arms' rate, ln(r)/2b: its filaments trail like the arms but
