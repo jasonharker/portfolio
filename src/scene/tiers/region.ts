@@ -239,12 +239,14 @@ export const region: Tier = {
     const gauss = () => Math.sqrt(-2 * Math.log(1 - rand())) * Math.cos(2 * Math.PI * rand());
     const members: number[] = [], memberTint: number[] = [], bright: number[] = [], brightTint: number[] = [];
     for (let i = 0; i < clusters; i++) {
-      // Along an arm's spine, from the disc's own exponential profile, clear of the bulge.
-      let r: number;
-      do r = 1.4 - 4.2 * Math.log(1 - rand());
-      while (r > DISC_RADIUS - 1 || r < 2);
-      const width = 0.45 + 0.07 * r;
-      const a = model.armAngleAt(r, Math.floor(rand() * model.arms)) + (gauss() * width * 0.45) / r;
+      // Along an arm's spine, from the disc's own exponential profile, clear of the bulge, as strong as the arm is there.
+      let r: number, arm: number;
+      do {
+        r = 1.4 - 4.2 * Math.log(1 - rand());
+        arm = Math.floor(rand() * model.arms);
+      } while (r > DISC_RADIUS - 1 || r < 2 || rand() > model.armWeightAt(r, arm));
+      const width = 0.12 + 0.018 * r; // across the arm, kpc
+      const a = model.armAngleAt(r, arm) + (gauss() * width * 0.45 * model.along) / r;
       const cx = r * Math.cos(a), cy = gauss() * 0.04, cz = r * Math.sin(a);
       const radius = CLUSTER_RADIUS[0] + (CLUSTER_RADIUS[1] - CLUSTER_RADIUS[0]) * rand();
       // Mostly sparse associations, a few rich clusters: equal knots would read as a string of pearls.
