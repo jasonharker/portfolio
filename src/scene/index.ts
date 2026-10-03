@@ -27,7 +27,7 @@ const DRIFT_S: [number, number] = [31, 23]; // periods of the lateral and vertic
 const ORBIT_PX = 0.005;
 const ORBIT_MAX = [Math.PI, 1.3]; // yaw, pitch
 const FLOOR = Math.sin(0.1); // the eye stays 0.1 rad above the disc plane: nothing is seen from underneath
-const ZOOM_MAX = [Math.log(0.35), Math.log(2.5)]; // the arm's length, as a log factor on the pose's
+const ZOOM_MAX = [Math.log(0.35), Math.log(2.5)]; // distance to the pivot, as a log factor on the pose's
 const ZOOM_PX = 0.0015; // log factor per wheel pixel
 const CLICK_PX = 4; // a drag shorter than this is still a click (a planet in the orrery)
 
@@ -50,7 +50,7 @@ export function start(canvas: HTMLCanvasElement, gl: WebGL2RenderingContext, lab
   let pose: CameraPose = { position: [0, 0, 1], target: [0, 0, 0], fov: 50 };
 
   // `goal` is [parallax x, parallax y, orbit yaw, orbit pitch, zoom]: the pointer in [-1, 1] (y up),
-  // the drag in radians, then the wheel as a log factor on the arm. `at`/`vel` are the eased value per axis; one spring serves both.
+  // the drag in radians, then the wheel as a log factor on the distance to the pivot. `at`/`vel` are the eased value per axis; one spring serves both.
   const goal = [0, 0, 0, 0, 0], at = [0, 0, 0, 0, 0], vel = [0, 0, 0, 0, 0];
   let drift = 0; // seconds of rendered frames
   let swayed = 0; // camera offset from the pose position / view distance, for __scene
@@ -93,10 +93,11 @@ export function start(canvas: HTMLCanvasElement, gl: WebGL2RenderingContext, lab
   // Pose plus sway into the camera. Called on every rendered frame, and whenever the pose changes.
   function aim() {
     swing(at[2], at[3], eye, look, camera.up); // orbit first
-    look.set(...pose.target);
-    swing(at[2], at[3], arm, camera.up); // orbit first
-    arm.multiplyScalar(Math.exp(at[4])); // then the wheel's dolly, along the arm
-    eye.addVectors(look, arm);
+    // Then the wheel's dolly: eye and target scaled about the pivot, so the object holds its place
+    // on screen and grows or shrinks there, the same way the orbit turns it in place.
+    const k = Math.exp(at[4]);
+    eye.sub(pivot).multiplyScalar(k).add(pivot);
+    look.sub(pivot).multiplyScalar(k).add(pivot);
     const dist = eye.distanceTo(look);
     const [sx, sy] = [
       PARALLAX * at[0] + DRIFT * Math.sin((2 * Math.PI * drift) / DRIFT_S[0]),
@@ -241,7 +242,7 @@ export function start(canvas: HTMLCanvasElement, gl: WebGL2RenderingContext, lab
   addEventListener('pointerup', release);
   addEventListener('pointercancel', release);
 
-  // The wheel dollies along the arm. Over the column or the masthead it is theirs to scroll.
+  // The wheel dollies toward the pivot. Over the column or the masthead it is theirs to scroll.
   addEventListener('wheel', (e) => {
     if ((e.target as Element).closest?.('.column, .masthead')) return;
     e.preventDefault();
