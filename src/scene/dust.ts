@@ -172,9 +172,10 @@ const fragment = /* glsl */ `
     // Everything meanders: a slow warp shifts lanes, web and cavities alike.
     vec2 warp = vec2(gnoise(xz * 0.4), gnoise(xz * 0.4 + 5.2));
 
-    // The lane sits on the arm's inner edge. Outward of it the arm frays: its strands fan out and wander
-    // off as spurs, further where the along-arm noise says so.
-    float dl = d + 0.35 * w + 0.5 * w * warp.x;
+    // The lane sits on the arm's concave edge, where the gas runs into it: d > 0 there, since the arm reaches
+    // that angle further out. Downstream the arm frays: its strands fan out and wander off as spurs, further
+    // where the along-arm noise says so.
+    float dl = 0.35 * w + 0.5 * w * warp.x - d;
     float fray = 0.5 + 0.5 * gnoise(vec2(s * 0.3, float(ARMS) + d * 0.2));
     float outer = max(dl, 0.0);
     float envelope = exp(-0.5 * dl * dl / (w * w * 1.2)) + smoothstep(0.2, 0.8, fray) * exp(-outer / (w * 2.2)) * step(0.0, dl) * 0.7;
