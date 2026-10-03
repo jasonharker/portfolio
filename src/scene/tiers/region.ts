@@ -139,7 +139,7 @@ const glowFragment = /* glsl */ `
   varying vec2 vUv;
   void main() {
     float d = length(vUv) * 8.0; // kpc, the quad spans ±8
-    float i = 2.2 * exp(-d * d / 0.06) + 0.6 * exp(-d * d / 1.2) + 0.16 * exp(-d / 2.0);
+    float i = 2.2 * exp(-d * d / 0.06) + 0.5 * exp(-d * d / 0.6) + 0.06 * exp(-d / 1.5); // compact: wide blue wings read as a cataract
     i *= smoothstep(8.0, 5.0, d) * uStrength;
     gl_FragColor = vec4(mix(uColor, vec3(1.0), clamp(i - 0.6, 0.0, 1.0)) * i, 1.0);
     #include <colorspace_fragment>

@@ -229,11 +229,11 @@ const fragment = /* glsl */ `
     // Diffuse starlight: an exponential disc, arms, and the bulge. Seen whole the disc reaches further
     // out, so the outer arms sit in faint light too.
     float disc = exp(-r / mix(5.5, 4.2, uLook)) * edge;
-    float bulge = exp(-r * r / 0.5) * 1.1 + exp(-r / 1.1) * 0.25;
+    float bulge = exp(-r * r / 0.5) * 1.1 + exp(-r / 1.1) * 0.12;
     // Close up there is no smooth floor of starlight: it is patchy, gathered in the arm and near black
     // between, and the bulge is left to the tier's own core glow rather than painted on the plane.
     float patchy = (0.02 + 0.5 * stars * stars) * (0.3 + 0.7 * smoothstep(-0.5, 0.5, warp.y));
-    float light = disc * mix(0.4 + 0.5 * broad, patchy, uLook) + bulge * mix(1.0, 0.08, uLook);
+    float light = disc * mix(0.15 + 0.6 * broad, patchy, uLook) + bulge * mix(1.0, 0.08, uLook);
     vec3 starColour = mix(mix(vec3(0.4, 0.6, 1.0), vec3(1.0, 0.86, 0.74), uLook), vec3(0.85, 0.92, 1.0), clamp(bulge, 0.0, 1.0));
 
     // Galaxy (MIRI): the dust glows, deep red where thin, through red-orange and amber to pale gold where
