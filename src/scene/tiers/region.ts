@@ -206,7 +206,7 @@ function overhead(aspect: number): CameraPose {
   // Screen right is +x and screen up is -z: wide screens push the disc right of the wide CV,
   // portrait ones push it up above the bottom sheet.
   const [tx, tz] = aspect >= 1 ? [-OVERHEAD_SHIFT * half * aspect, 0] : [0, OVERHEAD_SHIFT * half];
-  return { position: [tx, d, tz], target: [tx, 0, tz], fov: FOV, up: [0, 0, -1] };
+  return { position: [tx, d, tz], target: [tx, 0, tz], fov: FOV, up: [0, 0, -1], pivot: [0, 0, 0] };
 }
 
 function track<T extends { dispose(): void }>(d: T): T {
@@ -364,9 +364,10 @@ export const region: Tier = {
     if (p) {
       const pose = p.place.pose(width / height);
       const out = (v: CameraPose['position']) => new THREE.Vector3(...v).multiplyScalar(p.unit).add(p.at).toArray() as CameraPose['position'];
-      return { position: out(pose.position), target: out(pose.target), fov: FOV };
+      return { position: out(pose.position), target: out(pose.target), fov: FOV, pivot: out(pose.pivot ?? pose.target) };
     }
     const { target, position, right, up, back, distance: framed } = base(place);
+    const pivot = target.toArray() as CameraPose['target'];
     // Spec §6: the object sits right of centre beside the reading column. On a portrait
     // screen the column is a bottom sheet, so it sits high instead, pulled back to fit the width.
     const aspect = width / height;
@@ -385,6 +386,7 @@ export const region: Tier = {
       position: position.add(pan).toArray() as CameraPose['position'],
       target: target.add(pan).toArray() as CameraPose['target'],
       fov: FOV,
+      pivot,
     };
   },
 

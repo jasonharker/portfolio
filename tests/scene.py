@@ -308,6 +308,10 @@ def main():
         wait(pg, "__scene.path === '/gitops/'")
         settle(pg)
         check('orbit: navigating away brings the camera home', pg.evaluate('__scene.orbit') == 0, str(pg.evaluate('__scene.orbit')))
+        # Measured with the pointer where the drag ends, so the parallax is the same both times.
+        pg.mouse.move(vw * 0.85 - 120, vh * 0.5 + 40)
+        settle(pg)
+        p0 = pg.evaluate('__scene.pivot')
         # The wheel dollies on the sky and scrolls the column; navigating resets it like the orbit.
         pg.mouse.move(vw * 0.1, vh * 0.5)
         pg.mouse.wheel(0, -400)
@@ -331,6 +335,9 @@ def main():
         pg.mouse.up()
         settle(pg)
         check('orbit: a drag orbits a place too, and is not a click', pg.evaluate('__scene.orbit') > 0.2 and pg.evaluate('__scene.path') == '/gitops/', str(pg.evaluate('[__scene.orbit, __scene.path]')))
+        p1 = pg.evaluate('__scene.pivot')
+        # The object turns in place: it orbits its own centre, not the empty sky the frame aims at.
+        check('orbit: the object stays put on screen while it turns', math.dist(p0, p1) < vw * 0.02, f'{p0} -> {p1}')
 
         # Never under the disc: a long drag up (which lowers the eye) stops at the floor, on a place,
         # on the landing, and on resume's overhead, where a sideways drag tilts toward the disc too.

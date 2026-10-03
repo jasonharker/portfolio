@@ -295,6 +295,7 @@ export function createOrrery(ctx: SceneContext): LocalPlace {
         position: [pan.x, d * Math.sin(ELEVATION) + pan.y, d * Math.cos(ELEVATION) + pan.z],
         target: pan.toArray() as CameraPose['position'],
         fov: FOV,
+        pivot: [0, 0, 0],
       };
     },
 

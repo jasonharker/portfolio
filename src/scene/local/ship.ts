@@ -445,6 +445,7 @@ export function createShip(ctx: SceneContext): LocalPlace {
         position: position.toArray() as Vec3,
         target: pan.add(centre).toArray() as Vec3,
         fov: FOV,
+        pivot: centre.toArray() as Vec3,
       };
     },
     update(dt) {

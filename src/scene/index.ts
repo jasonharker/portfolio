@@ -55,7 +55,8 @@ export function start(canvas: HTMLCanvasElement, gl: WebGL2RenderingContext, lab
   let drift = 0; // seconds of rendered frames
   let swayed = 0; // camera offset from the pose position / view distance, for __scene
   const [eye, look, right, up, arm, axis] = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
-  const [probe, probeUp] = [new THREE.Vector3(), new THREE.Vector3()];
+  const [probe, probeLook, probeUp, pivot] = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+  const [turn, yawTurn] = [new THREE.Quaternion(), new THREE.Quaternion()];
   const Y = new THREE.Vector3(0, 1, 0);
   const ease = (dt: number) => {
     let moving = false;
@@ -69,25 +70,29 @@ export function start(canvas: HTMLCanvasElement, gl: WebGL2RenderingContext, lab
     }
     return moving;
   };
-  // The pose's arm (target to eye) and up, orbited about the target: yaw about the pose's up (the
-  // disc's axis unless the pose names its own, as resume's overhead does), pitch about the view's
-  // horizontal. The up turns with the arm, so a steep pitch never meets the pole and flips.
-  function swing(yaw: number, pitch: number, arm: THREE.Vector3, up: THREE.Vector3) {
-    arm.set(...pose.position).sub(axis.set(...pose.target));
+  // The pose's eye, target and up, orbited about its pivot (the framed object, not the target the
+  // frame panned aside): yaw about the pose's up (the disc's axis unless the pose names its own, as
+  // resume's overhead does), pitch about the view's horizontal. Eye and target turn together, so the
+  // object stays where it sits on screen and spins under the hand. The up turns too, so a steep
+  // pitch never meets the pole and flips.
+  function swing(yaw: number, pitch: number, eye: THREE.Vector3, look: THREE.Vector3, up: THREE.Vector3) {
+    eye.set(...pose.position);
+    look.set(...pose.target);
+    pivot.set(...(pose.pivot ?? pose.target));
     if (pose.up) up.set(...pose.up);
     else up.copy(Y);
-    right.crossVectors(up, arm).normalize();
-    arm.applyAxisAngle(right, -pitch);
-    up.applyAxisAngle(right, -pitch);
-    axis.set(...(pose.up ?? [0, 1, 0]));
-    arm.applyAxisAngle(axis, -yaw);
-    up.applyAxisAngle(axis, -yaw);
+    right.crossVectors(up, arm.subVectors(eye, look)).normalize();
+    turn.setFromAxisAngle(right, -pitch).premultiply(yawTurn.setFromAxisAngle(axis.set(...(pose.up ?? [0, 1, 0])), -yaw));
+    eye.sub(pivot).applyQuaternion(turn).add(pivot);
+    look.sub(pivot).applyQuaternion(turn).add(pivot);
+    up.applyQuaternion(turn);
   }
-  // Sine of the eye's elevation above the disc plane through the target, under an orbit.
-  const height = (yaw: number, pitch: number) => (swing(yaw, pitch, probe, probeUp), probe.y / probe.length());
+  // Sine of the eye's elevation above the disc plane through the pivot, under an orbit.
+  const height = (yaw: number, pitch: number) => (swing(yaw, pitch, probe, probeLook, probeUp), probe.sub(pivot).y / probe.length());
 
   // Pose plus sway into the camera. Called on every rendered frame, and whenever the pose changes.
   function aim() {
+    swing(at[2], at[3], eye, look, camera.up); // orbit first
     look.set(...pose.target);
     swing(at[2], at[3], arm, camera.up); // orbit first
     arm.multiplyScalar(Math.exp(at[4])); // then the wheel's dolly, along the arm
@@ -151,6 +156,10 @@ export function start(canvas: HTMLCanvasElement, gl: WebGL2RenderingContext, lab
     get parallax() { return Math.hypot(at[0], at[1]); },
     get orbit() { return Math.hypot(at[2], at[3]); },
     get height() { return height(at[2], at[3]); },
+    get pivot() {
+      const v = new THREE.Vector3(...(pose.pivot ?? pose.target)).project(camera);
+      return [((v.x + 1) / 2) * innerWidth, ((1 - v.y) / 2) * innerHeight] as [number, number];
+    },
     get zoom() { return at[4]; },
     get sway() { return swayed; },
     get hoverable() { return !!active?.hot; },
