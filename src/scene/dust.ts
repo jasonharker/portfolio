@@ -12,7 +12,7 @@
 //
 // Cost: full-screen noise, so it renders into its own target at quality.dustScale of CSS pixels and
 // is composited with one full-screen triangle: rgb adds, alpha absorbs whatever was drawn before it.
-// Per pixel: 5 noise samples, plus two filament fbms of up to `octaves` samples each (octaves finer
+// Per pixel: 6 noise samples, plus two filament fbms of up to `octaves` samples each (octaves finer
 // than the pixel are skipped, so ~3 each at Galaxy scale), plus 18 hashed cell probes (36 once the
 // small cavities and knots resolve, Region only). The target re-renders only when the view changes.
 import * as THREE from 'three';
@@ -87,7 +87,7 @@ const fragment = /* glsl */ `
   }
 
   // Cavities on a jittered grid of cell size \`cell\` kpc: (distance to the nearest centre in radii, its
-  // strength 0..1). \`p\` decides how many cells hold one; radii vary by 3x.
+  // strength 0..1). \`p\` decides how many cells hold one; radii log-spread over 5x, mostly small.
   vec2 cavities(vec2 p, float cell, float prob) {
     vec2 g = floor(p / cell), f = p / cell - g;
     vec2 best = vec2(9.0, 0.0);
@@ -97,7 +97,7 @@ const fragment = /* glsl */ `
       float s = smoothstep(keep, keep + 0.15, prob);
       if (s <= 0.0) continue;
       float h = hash12(g + o + 3.1);
-      float q = length(o + 0.15 + 0.7 * hash22(g + o) - f) / (0.16 + 0.34 * h * h);
+      float q = length(o + 0.15 + 0.7 * hash22(g + o) - f) / (0.1 * exp(1.6 * h * h));
       if (q < best.x) best = vec2(q, s);
     }
     return best;
