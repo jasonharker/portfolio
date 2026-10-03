@@ -182,9 +182,13 @@ const fragment = /* glsl */ `
     float strands = filaments(q, px * 1.3, 0.06);
     float lanes = envelope * strands * (0.35 + 0.9 * fray);
 
-    // The inter-arm web: fainter, isotropic, warped so it reads as gas rather than noise. Seen whole it
-    // carries more of its weight off the arms, as M74's does, so the gaps between them aren't empty.
-    float web = filaments(xz * 1.3 + warp * 0.9, px * 1.3, 0.04);
+    // The inter-arm web, fainter. Differential rotation winds all gas into trailing spirals, so the web is
+    // sampled in a frame that unwinds at half the arms' rate, ln(r)/2b: its filaments trail like the arms but
+    // steeper, and cross the gaps as feathers rather than curling. Seen whole it carries more of its weight
+    // off the arms, as M74's does, so the gaps between them aren't empty.
+    float tw = 0.5 * sqrt(uAlong * uAlong - 1.0) * log(max(r, R_MIN));
+    vec2 sh = mat2(cos(tw), -sin(tw), sin(tw), cos(tw)) * xz * 1.3 + warp * 0.9;
+    float web = filaments(sh, length(fwidth(sh)), 0.04);
     float disc0 = exp(-r / 9.0);
     float dust = (lanes * 0.8 + web * 1.1 * disc0 * mix(mix(0.5, 0.3, uLook), 1.0, min(stars, 1.0)) * smoothstep(-0.6, 0.4, warp.x)) * edge * inner;
 
