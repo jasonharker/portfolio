@@ -33,7 +33,8 @@ const vertex = /* glsl */ `
 const fragment = /* glsl */ `
   #define PI 3.141592653589793
   uniform vec4 uAngles[SAMPLES];
-  uniform float uAlong; // arc length along an arm per unit radius, sqrt(1 + 1/b²)
+  uniform vec4 uWeights[SAMPLES]; // how strong each arm is there, 0..1
+  uniform float uAlong; // arc length along an arm per unit radius, 1/sin(pitch)
   uniform float uLook;
   uniform float uGain;
   varying vec2 vXZ;
@@ -79,11 +80,13 @@ const fragment = /* glsl */ `
     return sum / norm;
   }
 
-  float armAngle(int arm, float r) {
+  // The arms at radius r, from the model's samples: where each one is, and how strong.
+  void armsAt(float r, out vec4 angle, out vec4 weight) {
     float f = clamp((log(max(r, R_MIN)) - log(R_MIN)) / (log(R_MAX) - log(R_MIN)), 0.0, 1.0) * float(SAMPLES - 1);
     int i = int(f);
     int j = min(i + 1, SAMPLES - 1);
-    return mix(uAngles[i][arm], uAngles[j][arm], fract(f));
+    angle = mix(uAngles[i], uAngles[j], fract(f));
+    weight = mix(uWeights[i], uWeights[j], fract(f));
   }
 
   // Cavities on a jittered grid of cell size \`cell\` kpc: (distance to the nearest centre in radii, its
@@ -142,8 +145,6 @@ const fragment = /* glsl */ `
     return sum;
   }
 
-  const vec4 ARM_END = vec4(16.0, 14.2, 15.3, 14.8); // kpc where each arm has faded out; places reach 11
-
   void main() {
     vec2 xz = vXZ;
     float px = length(fwidth(xz)); // kpc per target pixel
@@ -155,22 +156,22 @@ const fragment = /* glsl */ `
     float theta = atan(xz.y, xz.x);
     float edge = smoothstep(R_MAX, R_MAX - 4.5, r);
     float inner = smoothstep(0.1, 1.0, r);
-    float w = 0.3 + 0.05 * r; // arm half-width, kpc
+    float w = 0.08 + 0.013 * r; // arm half-width across it, kpc
 
     // Arms: starlight summed over all of them; the dust follows the nearest (d across it, s along it).
     // broad is the same arms' diffuse light, wider than the dust that rides them, so seen whole the
     // arms are brighter bands in a lit disc rather than threads on black.
     float stars = 0.0, broad = 0.0, d = 1e3, s = 0.0, tip = 1.0;
+    vec4 at, weight;
+    armsAt(r, at, weight);
     for (int k = 0; k < ARMS; k++) {
-      float dk = (mod(theta - armAngle(k, r) + PI, 2.0 * PI) - PI) * r;
-      // Each arm fades out over its own last 3 kpc, rather than all of them on one circle.
-      float fade = smoothstep(ARM_END[k], ARM_END[k] - 3.0, r);
-      stars += exp(-0.5 * dk * dk / (w * w * 1.8)) * fade;
-      broad += exp(-0.5 * dk * dk / (w * w * 3.5)) * fade;
+      float dk = (mod(theta - at[k] + PI, 2.0 * PI) - PI) * r / uAlong; // across the arm, kpc
+      stars += exp(-0.5 * dk * dk / (w * w * 1.8)) * weight[k];
+      broad += exp(-0.5 * dk * dk / (w * w * 3.5)) * weight[k];
       if (abs(dk) < abs(d)) {
         d = dk;
         s = r * uAlong + float(k) * 41.0;
-        tip = fade;
+        tip = weight[k];
       }
     }
     // Nor is an arm drawn with an even hand: past the inner disc it brightens, thins and breaks along its length.
@@ -184,18 +185,18 @@ const fragment = /* glsl */ `
     // that angle further out. Downstream the arm frays: its strands fan out and wander off as spurs, further
     // where the along-arm noise says so.
     float dl = 0.35 * w + 0.5 * w * warp.x - d;
-    float fray = 0.5 + 0.5 * gnoise(vec2(s * 0.3, float(ARMS) + d * 0.2));
+    float fray = 0.5 + 0.5 * gnoise(vec2(s * 0.3, float(ARMS) + d * 0.75));
     float outer = max(dl, 0.0);
     float envelope = exp(-0.5 * dl * dl / (w * w * 1.2)) + smoothstep(0.2, 0.8, fray) * exp(-outer / (w * 2.2)) * step(0.0, dl) * 0.7;
-    vec2 q = vec2(s * 0.3, (dl - 0.55 * outer) * 1.3 + warp.y * 1.2 * smoothstep(0.0, 2.5 * w, outer));
-    float strands = filaments(q, px * 1.3, 0.06);
+    vec2 q = vec2(s * 0.3, (dl - 0.55 * outer) * 5.0 + warp.y * 1.2 * smoothstep(0.0, 2.5 * w, outer));
+    float strands = filaments(q, px * 2.1, 0.06);
     float lanes = envelope * strands * (0.35 + 0.9 * fray) * seg * tip;
 
     // The inter-arm web, fainter. Differential rotation winds all gas into trailing spirals, so the web is
-    // sampled in a frame that unwinds nearly as fast as the arms: its filaments trail with them, a little
-    // steeper, in long strands rather than curls. Seen whole it carries more of its weight off the arms, as
+    // sampled in a sheared frame: its filaments trail as feathers about 30° open, steeper than the arms they
+    // leave, in long strands rather than curls. Seen whole it carries more of its weight off the arms, as
     // M74's does, so the gaps between them aren't empty.
-    float tw = 0.85 * sqrt(uAlong * uAlong - 1.0) * log(max(r, R_MIN));
+    float tw = 1.8 * log(max(r, R_MIN));
     vec2 sh = mat2(cos(tw), -sin(tw), sin(tw), cos(tw)) * xz * 1.3 + warp * 0.9;
     float web = filaments(sh, length(fwidth(sh)), 0.04);
     float disc0 = exp(-r / 9.0);
@@ -301,14 +302,14 @@ export interface Dust {
 
 export function createDust(model: GalaxyModel, look: number, gain: number, scale: number, octaves: number): Dust {
   if (model.arms > 4) throw new Error('dust: the shader packs at most four arms');
-  const angles = new Float32Array(4 * SAMPLES);
+  const angles = new Float32Array(4 * SAMPLES), weights = new Float32Array(4 * SAMPLES);
   for (let s = 0; s < SAMPLES; s++) {
     const r = R_MIN * Math.pow(R_MAX / R_MIN, s / (SAMPLES - 1));
-    for (let arm = 0; arm < model.arms; arm++) angles[s * 4 + arm] = model.armAngleAt(r, arm);
+    for (let arm = 0; arm < model.arms; arm++) {
+      angles[s * 4 + arm] = model.armAngleAt(r, arm);
+      weights[s * 4 + arm] = model.armWeightAt(r, arm);
+    }
   }
-  // Arc length along an arm per unit radius, from the spiral's mean winding (bends are local).
-  const b = Math.log(12 / 4) / (model.armAngleAt(12, 0) - model.armAngleAt(4, 0));
-  const along = Math.sqrt(1 + 1 / (b * b));
 
   const target = new THREE.WebGLRenderTarget(1, 1, { depthBuffer: false });
   const scene = new THREE.Scene();
@@ -316,7 +317,7 @@ export function createDust(model: GalaxyModel, look: number, gain: number, scale
   const material = new THREE.ShaderMaterial({
     vertexShader: vertex, fragmentShader: fragment,
     defines: { ARMS: model.arms, SAMPLES, OCTAVES: octaves, R_MIN: R_MIN.toFixed(3), R_MAX: R_MAX.toFixed(3) },
-    uniforms: { uAngles: { value: angles }, uAlong: { value: along }, uLook: { value: look }, uGain: { value: gain } },
+    uniforms: { uAngles: { value: angles }, uWeights: { value: weights }, uAlong: { value: model.along }, uLook: { value: look }, uGain: { value: gain } },
     depthTest: false, depthWrite: false, blending: THREE.NoBlending,
   });
   const plane = new THREE.Mesh(geometry, material);

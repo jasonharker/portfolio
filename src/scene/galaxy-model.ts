@@ -7,8 +7,12 @@ export interface GalaxyModel {
   positions: Float32Array;
   /** Colour temperature per star, kelvin. */
   temperatures: Float32Array;
-  /** Angle (radians, atan2(z, x)) of arm `arm` (0 ≤ arm < arms) at radius r. Every non-core waypoint lies on an arm. */
+  /** Angle (radians, atan2(z, x)) of arm `arm` (0 ≤ arm < arms) at radius r. Every non-core waypoint lies on a major arm. */
   armAngleAt(r: number, arm: number): number;
+  /** How strong arm `arm` is at radius r, 0..1. */
+  armWeightAt(r: number, arm: number): number;
+  /** Arc length along an arm per unit radius, 1/sin(pitch): a distance across an arm times this is one around the disc. */
+  along: number;
   /** Number of arms, for armAngleAt. */
   arms: number;
 }
@@ -33,13 +37,25 @@ export function prng(seed: number) {
 
 const wrap = (a: number) => ((a % TAU) + TAU) % TAU;
 
-const ARMS = 4;
+const ARMS = 4; // the even ones are major and carry the places; the odd ones, between them, are minor
 const BEND = 0.25; // width of an arm's bend around a place, in ln(r)
+const ARM_END = [16, 14.2, 15.3, 14.8]; // kpc where each arm has faded out; places reach 11
+const MINOR = 0.3; // a minor arm's strength, once it has emerged
+const OPEN = 1 / Math.tan((18 * Math.PI) / 180); // winding per unit ln(r) inward of the places, where nothing pins it
+
+const smooth = (lo: number, hi: number, x: number) => {
+  const t = Math.min(1, Math.max(0, (x - lo) / (hi - lo)));
+  return t * t * (3 - 2 * t);
+};
+/** Each arm fades out over its own last 3 kpc, rather than all of them on one circle; a minor one emerges mid-disc. */
+const armWeightAt = (r: number, arm: number) => smooth(ARM_END[arm], ARM_END[arm] - 3, r) * (arm % 2 ? MINOR * smooth(3, 6, r) : 1);
 
 /**
- * A four-armed logarithmic spiral, θ = φ + k·π/2 + ln(r)/b + bend(r), b = tan(pitch). Pitch (12°–25°, an open
- * Sb–Sc spiral) and φ are searched so the places sit as close to the arms as they can; then each arm is bent by a
- * sum of gaussians in ln(r), solved so it passes exactly through every place assigned to it.
+ * A grand design: two major logarithmic arms and two minor ones between them, θ = φ + k·π/2 + wind(ln r) + bend(r).
+ * Across the places wind is ln(r)/b, b = tan(pitch); pitch (8°–25°) and φ are searched so the places sit as close to
+ * the major arms as they can, then each is bent by a sum of gaussians in ln(r), solved so it passes exactly through
+ * every place assigned to it. Two arms through these places wind tight (~9°), so inward of them, where nothing pins
+ * the arms, they open out to OPEN as they leave the bulge: a coil of rings round the core reads as a target.
  */
 function spiral(waypoints: Waypoint[]) {
   const places = waypoints
@@ -47,19 +63,23 @@ function spiral(waypoints: Waypoint[]) {
     .filter((p) => p.r >= CORE)
     .map((p) => ({ ...p, lr: Math.log(p.r) }));
   const step = TAU / ARMS;
-  /** Signed angle to the nearest arm, and which arm. */
+  const lo = places.length ? Math.min(...places.map((p) => p.lr)) - 0.15 : -Infinity;
+  const soft = (x: number) => 0.15 * Math.log1p(Math.exp(x / 0.15)); // max(x, 0), rounded over ~0.3 in ln(r)
+  const wind = (lr: number, b: number) => lr / b - (OPEN - 1 / b) * soft(lo - lr);
+  /** Signed angle to the nearest major arm, and which arm. */
   const nearest = (a: number) => {
-    const k = Math.round(wrap(a) / step);
-    return { e: wrap(a) - k * step, arm: k % ARMS };
+    const k = Math.round(wrap(a) / (2 * step));
+    return { e: wrap(a) - 2 * k * step, arm: (2 * k) % ARMS };
   };
-  const residuals = (b: number, phi: number) => places.map((p) => nearest(p.a - p.lr / b - phi));
+  const residuals = (b: number, phi: number) => places.map((p) => nearest(p.a - wind(p.lr, b) - phi));
 
-  let pitch = 12, phi = 0, worst = Infinity;
-  for (let deg = 12; places.length && deg <= 25; deg += 0.05) {
+  let pitch = 8, phi = 0, worst = Infinity;
+  for (let deg = 8; places.length && deg <= 25; deg += 0.05) {
     const b = Math.tan((deg * Math.PI) / 180);
-    for (let f = 0; f < step; f += 0.004) {
+    const wound = places.map((p) => p.a - wind(p.lr, b)); // the phase doesn't change it
+    for (let f = 0; f < 2 * step; f += 0.008) {
       let w = 0;
-      residuals(b, f).forEach(({ e }, i) => (w = Math.max(w, Math.abs(e) * places[i].r)));
+      wound.forEach((a, i) => (w = Math.max(w, Math.abs(nearest(a - f).e) * places[i].r)));
       if (w < worst - 1e-9) (worst = w), (pitch = deg), (phi = f);
     }
   }
@@ -85,16 +105,19 @@ function spiral(waypoints: Waypoint[]) {
   }
   const weights = m.map((row, i) => row[n] / row[i]);
 
-  return (r: number, arm: number) => {
+  const armAngleAt = (r: number, arm: number) => {
     const lr = Math.log(Math.max(r, 1e-3));
     let bend = 0;
     for (let i = 0; i < n; i++) if (res[i].arm === arm) bend += weights[i] * g(lr - places[i].lr);
-    return phi + arm * step + lr / b + bend;
+    return phi + arm * step + wind(lr, b) + bend;
   };
+  // ponytail: one along, the places' pitch; inward of them the arms open out and read up to ~2x broader across.
+  // Per-radius along (from wind's slope) if that shows.
+  return { armAngleAt, along: 1 / Math.sin((pitch * Math.PI) / 180) };
 }
 
 export function galaxyModel(seed: number, count: number, waypoints: Waypoint[]): GalaxyModel {
-  const armAngleAt = spiral(waypoints);
+  const { armAngleAt, along } = spiral(waypoints);
 
   const rand = prng(seed);
   const gauss = () => Math.sqrt(-2 * Math.log(1 - rand())) * Math.cos(TAU * rand());
@@ -123,11 +146,15 @@ export function galaxyModel(seed: number, count: number, waypoints: Waypoint[]):
       z = gauss() * s;
       t = between(3000, 5400);
     } else if (kind < 0.8) {
-      // Arm: an exponential disc wrapped along one arm, with a gaussian cross-section.
-      const r = discRadius(1.4, 4.2);
-      const width = 0.45 + 0.07 * r;
+      // Arm: an exponential disc wrapped along the arms, each as strong as it is there, with a gaussian cross-section.
+      let r: number, arm: number;
+      do {
+        r = discRadius(1.4, 4.2);
+        arm = Math.floor(rand() * ARMS);
+      } while (rand() > armWeightAt(r, arm));
+      const width = 0.12 + 0.018 * r; // across the arm, kpc
       const off = gauss() * width;
-      const a = armAngleAt(r, Math.floor(rand() * ARMS)) + off / r;
+      const a = armAngleAt(r, arm) + (off * along) / r;
       x = r * Math.cos(a);
       z = r * Math.sin(a);
       y = gauss() * 0.1;
@@ -161,5 +188,5 @@ export function galaxyModel(seed: number, count: number, waypoints: Waypoint[]):
     temperatures[i] = t;
   }
 
-  return { positions, temperatures, armAngleAt, arms: ARMS };
+  return { positions, temperatures, armAngleAt, armWeightAt, along, arms: ARMS };
 }
