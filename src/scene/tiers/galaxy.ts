@@ -1,8 +1,8 @@
-// Galaxy tier (spec §3): the whole disc, tilted, bulge brightest, the places as marked points. Nothing to read.
+// Galaxy tier (spec §3): the whole disc, tilted, bulge brightest. Nothing to read.
 // The look is JWST's Phantom Galaxy (M74): orange-red dust filaments tracing the arms, a blue-white core,
 // many-coloured stars, a deep field behind, spikes on the foreground stars (dust.ts, jwst.ts).
 // Draw calls: dust into its target (1), then deep field, stars, dust composite, bulge glow, foreground
-// stars (5), bloom's passes, place markers (1).
+// stars (5), bloom's passes.
 import * as THREE from 'three';
 import { createDust, type Dust } from '../dust';
 import { DISC_RADIUS, galaxyModel, SEED } from '../galaxy-model';
@@ -72,40 +72,14 @@ const glowFragment = /* glsl */ `
   }
 `;
 
-const markerVertex = /* glsl */ `
-  uniform float uSize;
-  void main() {
-    gl_PointSize = uSize;
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-  }
-`;
-const markerFragment = /* glsl */ `
-  uniform vec3 uColor;
-  uniform vec3 uGround;
-  uniform float uPx;
-  void main() {
-    float d = length(gl_PointCoord * 2.0 - 1.0);
-    float aa = 2.0 / uPx;
-    float ring = 1.0 - smoothstep(0.0, aa * 1.5, abs(d - 0.72) - aa);
-    float core = 1.0 - smoothstep(0.16, 0.16 + aa * 2.0, d);
-    float mark = max(ring, core);
-    // A dark keyline so the mark still reads over the bright bulge.
-    float keyline = 1.0 - smoothstep(0.0, aa * 1.5, abs(d - 0.72) - aa * 3.5);
-    gl_FragColor = vec4(mix(uGround, uColor, mark), max(mark, keyline * 0.6));
-    ${outputChunks}
-  }
-`;
-
 let ctx: SceneContext;
 let scene: THREE.Scene;
-let markers: THREE.Scene;
 let bloom: Bloom | null = null;
 let dust: Dust;
 let sky: Sky;
 let aspect = 16 / 9;
 const disposables: { dispose(): void }[] = [];
 const starUniforms = { uScale: { value: 1 }, uGain: { value: 1 } };
-const markerUniforms = { uSize: { value: 18 }, uPx: { value: 18 }, uColor: { value: new THREE.Color() }, uGround: { value: new THREE.Color() } };
 const buffer = new THREE.Vector2();
 
 function place(id: PlaceId): Waypoint {
@@ -155,7 +129,6 @@ export const galaxy: Tier = {
     scene = new THREE.Scene();
     // As scene.background, not setClearColor: the clear is then encoded for whichever target is bound.
     scene.background = c.colour('--ground');
-    markers = new THREE.Scene();
     // Blending is jwst.ts's screen blend, src + dst·(1 − src): light accumulates like additive but tops out
     // at white, so the dense bulge can't run away into HDR values that bloom would smear over the whole sky.
 
@@ -204,19 +177,6 @@ export const galaxy: Tier = {
 
     scene.add(sky.group, points, dust.composite, glow);
 
-    // Places, drawn after bloom so they stay crisp.
-    const markerGeo = own(new THREE.BufferGeometry());
-    markerGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(c.topology.waypoints.flatMap((w) => w.pos)), 3));
-    markerUniforms.uColor.value = c.colour('--ink');
-    markerUniforms.uGround.value = c.colour('--ground');
-    const markerMat = own(new THREE.ShaderMaterial({
-      vertexShader: markerVertex, fragmentShader: markerFragment, uniforms: markerUniforms,
-      transparent: true, depthTest: false, depthWrite: false,
-    }));
-    const marks = new THREE.Points(markerGeo, markerMat);
-    marks.frustumCulled = false;
-    markers.add(marks);
-
     if (c.quality.bloom) bloom = createBloom(c.renderer, { strength: 0.55, radius: 0.35, threshold: 0.6 });
   },
 
@@ -245,17 +205,10 @@ export const galaxy: Tier = {
     }
     renderer.getDrawingBufferSize(buffer);
     starUniforms.uScale.value = buffer.y / (2 * Math.tan(THREE.MathUtils.degToRad(cam.fov) / 2));
-    const px = 18 * renderer.getPixelRatio();
-    markerUniforms.uSize.value = markerUniforms.uPx.value = px;
 
     dust.render(renderer, camera);
     if (bloom) bloom.render(scene, camera);
     else renderer.render(scene, camera);
-
-    const autoClear = renderer.autoClear;
-    renderer.autoClear = false;
-    renderer.render(markers, camera);
-    renderer.autoClear = autoClear;
   },
 
   resize(width, height) {
