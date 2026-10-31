@@ -25,7 +25,7 @@ spec:
     args:
     - 99d
   - name: git
-    image: alpine/git:latest
+    image: alpine/git:2.54.0
     command:
     - sleep
     args:
