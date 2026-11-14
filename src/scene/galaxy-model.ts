@@ -79,7 +79,11 @@ function spiral(waypoints: Waypoint[]) {
     const wound = places.map((p) => p.a - wind(p.lr, b)); // the phase doesn't change it
     for (let f = 0; f < 2 * step; f += 0.008) {
       let w = 0;
-      wound.forEach((a, i) => (w = Math.max(w, Math.abs(nearest(a - f).e) * places[i].r)));
+      // nearest().e, without the object, and given up once this phase can't win: ~130k phases a page load.
+      for (let i = 0; i < wound.length && w < worst; i++) {
+        const a = wrap(wound[i] - f);
+        w = Math.max(w, Math.abs(a - 2 * Math.round(a / (2 * step)) * step) * places[i].r);
+      }
       if (w < worst - 1e-9) (worst = w), (pitch = deg), (phi = f);
     }
   }

@@ -277,7 +277,7 @@ export const region: Tier = {
       const lum = t > 8000 ? 0.55 + 0.8 * h : 0.3 + 0.45 * h;
       const x = model.positions[i * 3], y = model.positions[i * 3 + 1], z = model.positions[i * 3 + 2];
       col.multiplyScalar(THREE.MathUtils.smoothstep(Math.hypot(x, y, z), 0.5, 6) * 0.6 + 0.15);
-      tint.set([col.r, col.g, col.b, STAR_SIZE * lum], i * 4);
+      (tint[i * 4] = col.r), (tint[i * 4 + 1] = col.g), (tint[i * 4 + 2] = col.b), (tint[i * 4 + 3] = STAR_SIZE * lum);
     }
     tint.set(memberTint, n * 4);
     const starGeometry = track(new THREE.BufferGeometry());

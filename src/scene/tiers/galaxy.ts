@@ -150,7 +150,7 @@ export const galaxy: Tier = {
       // The young blue clusters along the arms' spines, bigger and brighter so they show against the gold.
       const young = t > 12000 ? 1.2 : 1;
       col.multiplyScalar(dim * young);
-      tint.set([col.r, col.g, col.b, 0.05 * lum * young], i * 4);
+      (tint[i * 4] = col.r), (tint[i * 4 + 1] = col.g), (tint[i * 4 + 2] = col.b), (tint[i * 4 + 3] = 0.05 * lum * young);
     }
     const stars = own(new THREE.BufferGeometry());
     stars.setAttribute('position', new THREE.BufferAttribute(model.positions, 3));
