@@ -226,8 +226,13 @@ export interface Sky {
   dispose(): void;
 }
 
-/** Deep field and foreground stars, seeded from the one galaxy SEED so every tier sees the same sky. */
-export function createSky(fieldCount: number, foregroundCount: number, dpr: number, colour: (token: string) => THREE.Color): Sky {
+// Every tier sees the same sky, so they share its geometry: the second tier to load only adds its own
+// materials. A tier that disposes its sky frees the buffers under the other, which three re-uploads.
+let shared: { key: string; fieldGeometry: THREE.BufferGeometry; fgGeometry: THREE.BufferGeometry } | undefined;
+
+function skyGeometry(fieldCount: number, foregroundCount: number, colour: (token: string) => THREE.Color) {
+  const key = `${fieldCount}/${foregroundCount}`;
+  if (shared?.key === key) return shared;
   const rand = prng(SEED ^ 0x5eed);
   const pick = <T>(xs: T[]) => xs[Math.floor(rand() * xs.length)];
 
@@ -284,9 +289,6 @@ export function createSky(fieldCount: number, foregroundCount: number, dpr: numb
   fieldGeometry.setAttribute('shape', new THREE.Float32BufferAttribute(shape, 4));
   fieldGeometry.setAttribute('tint', new THREE.Float32BufferAttribute(fieldTint, 4));
   fieldGeometry.setAttribute('lens', new THREE.Float32BufferAttribute(lens, 3));
-  const fieldUniforms = { uDpr: { value: dpr }, uGain: { value: 1 } };
-  const fieldMaterial = new THREE.ShaderMaterial({ vertexShader: fieldVertex, fragmentShader: fieldFragment, uniforms: fieldUniforms, ...additive , depthTest: true });
-  const field = new THREE.Points(fieldGeometry, fieldMaterial);
 
   // Foreground stars: the brightest things in any frame, blackbody-tinted from the tokens. Mostly
   // hot: beside the redshifted galaxies a Milky Way star reads blue-white in NIRCam colour.
@@ -304,6 +306,15 @@ export function createSky(fieldCount: number, foregroundCount: number, dpr: numb
   fgGeometry.setAttribute('position', new THREE.Float32BufferAttribute(fgPos, 3));
   fgGeometry.setAttribute('tint', new THREE.Float32BufferAttribute(fgTint, 4));
   fgGeometry.setAttribute('phase', new THREE.Float32BufferAttribute(phase, 1));
+  return (shared = { key, fieldGeometry, fgGeometry });
+}
+
+/** Deep field and foreground stars, seeded from the one galaxy SEED so every tier sees the same sky. */
+export function createSky(fieldCount: number, foregroundCount: number, dpr: number, colour: (token: string) => THREE.Color): Sky {
+  const { fieldGeometry, fgGeometry } = skyGeometry(fieldCount, foregroundCount, colour);
+  const fieldUniforms = { uDpr: { value: dpr }, uGain: { value: 1 } };
+  const fieldMaterial = new THREE.ShaderMaterial({ vertexShader: fieldVertex, fragmentShader: fieldFragment, uniforms: fieldUniforms, ...additive , depthTest: true });
+  const field = new THREE.Points(fieldGeometry, fieldMaterial);
   const fgUniforms = { uDpr: { value: dpr }, uGain: { value: 1 }, uTime: { value: 0 } };
   const fgMaterial = new THREE.ShaderMaterial({ vertexShader: foregroundVertex, fragmentShader: foregroundFragment, uniforms: fgUniforms, ...additive , depthTest: true });
   const foreground = new THREE.Points(fgGeometry, fgMaterial);
