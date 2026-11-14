@@ -9,8 +9,15 @@ const { waypoints } = yaml.load(readFileSync(new URL('../data/topology.yaml', im
 };
 const N = 20000;
 const a = galaxyModel(7, N, waypoints as never);
-const b = galaxyModel(7, N, waypoints as never);
+const b = galaxyModel(7, N, [...waypoints] as never); // a copy: past the cache, so this is a second run
 const c = galaxyModel(8, N, waypoints as never);
+// A smaller model is the start of a larger one, cached (same waypoints) or built afresh (a copy).
+const big = galaxyModel(7, N, waypoints as never);
+for (const w of [waypoints, [...waypoints]]) {
+  const small = galaxyModel(7, N / 4, w as never);
+  assert.deepEqual(small.positions, big.positions.slice(0, (N / 4) * 3), 'a smaller model is a prefix');
+  assert.deepEqual(small.temperatures, big.temperatures.slice(0, N / 4), 'a smaller model is a prefix');
+}
 
 assert.equal(a.positions.length, N * 3);
 assert.equal(a.temperatures.length, N);
