@@ -116,7 +116,16 @@ function spiral(waypoints: Waypoint[]) {
   return { armAngleAt, along: 1 / Math.sin((pitch * Math.PI) / 180) };
 }
 
+// The stars come off one seeded stream, so a smaller model is the start of a larger one: the Galaxy
+// tier's are the first of Region's, and the second tier to load takes views instead of running the
+// arm search and the generator again. Holds the largest model built (~2.4 MB at 150k stars).
+let last: { seed: number; waypoints: Waypoint[]; model: GalaxyModel } | undefined;
+
 export function galaxyModel(seed: number, count: number, waypoints: Waypoint[]): GalaxyModel {
+  if (last && last.seed === seed && last.waypoints === waypoints && count <= last.model.temperatures.length) {
+    const { model } = last;
+    return { ...model, positions: model.positions.subarray(0, count * 3), temperatures: model.temperatures.subarray(0, count) };
+  }
   const { armAngleAt, along } = spiral(waypoints);
 
   const rand = prng(seed);
@@ -188,5 +197,7 @@ export function galaxyModel(seed: number, count: number, waypoints: Waypoint[]):
     temperatures[i] = t;
   }
 
-  return { positions, temperatures, armAngleAt, armWeightAt, along, arms: ARMS };
+  const model = { positions, temperatures, armAngleAt, armWeightAt, along, arms: ARMS };
+  last = { seed, waypoints, model };
+  return model;
 }
