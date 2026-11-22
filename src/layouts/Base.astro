@@ -31,6 +31,18 @@ const nav = [
 const json = (v: unknown) => JSON.stringify(v).replace(/</g, '\\u003c');
 const topology = json((await getEntry('topology', 'thales'))!.data);
 // One planet per incident in the Local orrery, best first. Only what the scene draws: no prose.
+// Ties the site to the GitHub and LinkedIn profiles for search engines. Home page only: it describes
+// the person, not each page. A data block like the two below, so the CSP allows it.
+const person = path === '/' && json({
+  '@context': 'https://schema.org',
+  '@type': 'Person',
+  name: 'Jason Harker',
+  url: Astro.site!.href,
+  jobTitle: 'Cloud Engineer',
+  worksFor: { '@type': 'Organization', name: 'Circa Resort & Casino' },
+  address: { '@type': 'PostalAddress', addressLocality: 'Las Vegas', addressRegion: 'NV', addressCountry: 'US' },
+  sameAs: ['https://github.com/jasonharker', 'https://www.linkedin.com/in/jason-harker/'],
+});
 const incidents = json(
   (await getCollection('incidents'))
     .sort((a, b) => a.data.order - b.data.order)
@@ -57,6 +69,8 @@ const incidents = json(
     <meta property="og:image:alt" content="A spiral galaxy against a dark night sky." />
     <meta name="twitter:card" content="summary_large_image" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="sitemap" href="/sitemap.xml" />
+    {person && <script type="application/ld+json" is:inline set:html={person} />}
     <link rel="preload" href={sans} as="font" type="font/woff2" crossorigin />
     <link rel="preload" href={pagella} as="font" type="font/woff2" crossorigin />
     <ClientRouter />
