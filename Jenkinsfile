@@ -16,7 +16,7 @@ metadata:
   labels:
     jenkins: agent
 spec:
-  serviceAccountName: jenkins
+  serviceAccountName: jenkins-agent
   containers:
   - name: kaniko
     image: gcr.io/kaniko-project/executor:debug
