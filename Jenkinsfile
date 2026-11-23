@@ -118,7 +118,7 @@ spec:
                         def shortCommit = GIT_COMMIT.take(8)
                         container('git') {
                             sh """
-                                git config --global user.email "jenkins@thales.local"
+                                git config --global user.email "243025617+jasonharker@users.noreply.github.com"
                                 git config --global user.name "Jenkins CI"
                                 mkdir -p ~/.ssh
                                 cp ${SSH_KEY} ~/.ssh/id_ed25519
